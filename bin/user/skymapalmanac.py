@@ -72,8 +72,9 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             user.skyfieldalmanac.ephemerides is None):
             raise weewx.UnknownType(attr)
         
+        ordinates = ('N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'N/A')
         if attr=='skymap':
-            return self.skymap(almanac_obj)
+            return self.skymap(almanac_obj, ordinates)
 
         raise weewx.UnknownType(attr)
     
@@ -87,7 +88,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         alt = 90-alt
         return -alt*numpy.sin(az),-alt*numpy.cos(az)
 
-    def skymap(self, almanac_obj):
+    def skymap(self, almanac_obj, ordinates):
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
         observer = SkymapAlmanacType.get_observer(almanac_obj)
         s = SkymapAlmanacType.SVG_START
@@ -104,7 +105,15 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         for i in range(11):
             if i!=5:
                 s += '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&deg;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15)
-                s += '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="left" dominant-baseline="middle">%s&deg;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15)
+                s += '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&deg;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15)
+        # celestial pole and equator
+        # displayed for latitude more than 5 degrees north or south only
+        if abs(almanac_obj.lat)>5.0:
+            y1 = almanac_obj.lat-90 if almanac_obj.lat>=0 else 90+almanac_obj.lat
+            y2 = almanac_obj.lat if almanac_obj.lat>=0 else -almanac_obj.lat
+            txt = ordinates[0 if almanac_obj.lat>=0 else 8]
+            s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%sh5M-90,0A90,%s 0 0 0 90,0" />\n' % (y1,y2)
+            s += '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (y1,txt)
         # bodies
         dots = []
         for body in self.bodies:
@@ -138,13 +147,13 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             azh = i*15*DEG2RAD
             x,y = SkymapAlmanacType.to_xy(-8,azh)
             if i==0:
-                txt = 'N'
+                txt = ordinates[0] # north
             elif i==6:
-                txt = 'O'
+                txt = ordinates[4] # east
             elif i==12:
-                txt = 'S'
+                txt = ordinates[8] # south
             elif i==18:
-                txt = 'W'
+                txt = ordinates[12] # west
             else:
                 txt = "%d°" % (i*15)
             s += '<text x="%s" y="%s" style="font-size:5px" fill="currentColor" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (x,y,txt)
