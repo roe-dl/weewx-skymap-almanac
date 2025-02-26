@@ -49,7 +49,13 @@ def logerr(msg):
     log.error(msg)
 
 def _get_config(config_dict):
-    return {'enable':True}
+    """ get almanac configuration """
+    conf_dict = config_dict.get('Almanac',configobj.ConfigObj()).get('Skymap',configobj.ConfigObj())
+    alm_conf_dict = weeutil.config.accumulateLeaves(conf_dict)
+    alm_conf_dict['enable'] = weeutil.weeutil.to_bool(conf_dict.get('enable',True))
+    alm_conf_dict['log_success'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_success',True))
+    alm_conf_dict['log_failure'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_failure',True))
+    return alm_conf_dict
 
 class SkymapAlmanacType(weewx.almanac.AlmanacType):
 
@@ -64,7 +70,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
     def __init__(self, config_dict, path):
         self.config_dict = config_dict
         self.path = path
-        self.bodies = ['sun','moon','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter']
+        self.bodies = config_dict.get('bodies',['sun','moon','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter'])
 
     def get_almanac_data(self, almanac_obj, attr):
         """ calculate attribute """
@@ -72,9 +78,12 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             user.skyfieldalmanac.ephemerides is None):
             raise weewx.UnknownType(attr)
         
+        # TODO: get this from the skin
         ordinates = ('N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'N/A')
+        labels = {'sun':'Sonne','moon':'Mond','venus':'Venus','mars_barycenter':'Mars','jupiter_barycenter':'Jupiter','saturn_barycenter':'Saturn','neptune_barycenter':'Neptun','pluto_barycenter':'Pluto'}
+
         if attr=='skymap':
-            return self.skymap(almanac_obj, ordinates)
+            return self.skymap(almanac_obj, ordinates, labels)
 
         raise weewx.UnknownType(attr)
     
@@ -88,7 +97,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         alt = 90-alt
         return -alt*numpy.sin(az),-alt*numpy.cos(az)
 
-    def skymap(self, almanac_obj, ordinates):
+    def skymap(self, almanac_obj, ordinates, labels):
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
         observer = SkymapAlmanacType.get_observer(almanac_obj)
         s = SkymapAlmanacType.SVG_START
@@ -110,9 +119,9 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         # displayed for latitude more than 5 degrees north or south only
         if abs(almanac_obj.lat)>5.0:
             y1 = almanac_obj.lat-90 if almanac_obj.lat>=0 else 90+almanac_obj.lat
-            y2 = almanac_obj.lat if almanac_obj.lat>=0 else -almanac_obj.lat
+            y2 = 0 if almanac_obj.lat>=0 else 1
             txt = ordinates[0 if almanac_obj.lat>=0 else 8]
-            s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%sh5M-90,0A90,%s 0 0 0 90,0" />\n' % (y1,y2)
+            s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%sh5M-90,0A90,%s 0 0 %s 90,0" />\n' % (y1,almanac_obj.lat,y2)
             s += '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (y1,txt)
         # bodies
         dots = []
@@ -131,10 +140,18 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
                     r = 0.75
                 else:
                     r = 0.5
-                dots.append(('%s\nh=%.1f&deg; a=%.1f&deg;' % (body,alt.degrees,az.degrees),x,y,r,distance))
+                if body in ('mars','mars_barycenter'):
+                    col = '#ff8f5e'
+                elif body=='moon':
+                    col = '#ffecd5'
+                else:
+                    col = '#ffffff'
+                dir = int(round(az.degrees/22.5,0))
+                if dir==16: dir = 0
+                dots.append(('%s\nh=%.1f&deg; a=%.1f&deg; %s' % (labels.get(body,body),alt.degrees,az.degrees,ordinates[dir]),x,y,r,distance,col))
         dots.sort(key=lambda x:-x[4].km)
         for dot in dots:
-            s += '<circle cx="%s" cy="%s" r="%s" fill="#fff" stroke="none"><title>%s</title></circle>\n' % (dot[1],dot[2],dot[3],dot[0])
+            s += '<circle cx="%s" cy="%s" r="%s" fill="%s" stroke="none"><title>%s</title></circle>\n' % (dot[1],dot[2],dot[3],dot[5],dot[0])
         # azimuth scale
         s += '<path fill="none" stroke="currentColor" stroke-width="0.4" d="'
         for i in range(24):
@@ -173,7 +190,7 @@ class SkymapService(StdService):
         alm_conf_dict = _get_config(config_dict)
         if alm_conf_dict['enable']:
             # instantiate the Skymap almanac
-            self.skymap_almanac = SkymapAlmanacType(config_dict, self.path)
+            self.skymap_almanac = SkymapAlmanacType(alm_conf_dict, self.path)
             # add to the list of almanacs
             weewx.almanac.almanacs.insert(0,self.skymap_almanac)
             logdbg("%s started" % self.__class__.__name__)
