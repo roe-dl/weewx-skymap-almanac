@@ -46,7 +46,23 @@ WeeWX from version 5.2 on and weewx-skyfield-almanac
 
 ## Usage
 
+### Sky map
+
 Add `$almanac.skymap` to your skin.
+
+The map shows the sky as you would see it if you were lying on the ground, 
+your legs to the south, and looking upwards. The size of the heavenly bodies 
+on the map is not according to scale.
+
+You can change the size of the map or other properties by setting parameters
+like `$almanac.skymap(width=1200)`.
+
+### Moon with moon phase
+
+Add `$almanac.moon_symbol` to your skin.
+
+You can change the size of the symbol by setting the parameter `width` like
+`$almanac.moon_symbol(width=200)`.
 
 ## Links
 
