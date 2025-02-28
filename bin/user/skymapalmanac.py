@@ -188,7 +188,7 @@ class SkymapBinder:
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
-            background = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
+            background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
         background_color = "#%02X%02X%02X" % background_color
         s += '<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color
         # start clipping
@@ -222,6 +222,7 @@ class SkymapBinder:
                 y1,txt)
         # stars
         df = user.skyfieldalmanac.stars
+        logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
         if df is not None and self.show_stars:
             # filter
             df = df[df['magnitude'] <= self.magnitude]
