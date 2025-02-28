@@ -1,6 +1,8 @@
 # weewx-skymap-almanac
 Sky map for WeeWX
 
+![sky map](skymap.png)
+
 ## Prerequisites
 
 WeeWX from version 5.2 on and weewx-skyfield-almanac

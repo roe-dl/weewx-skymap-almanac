@@ -22,6 +22,7 @@
 VERSION="0.1"
 
 import time
+import os.path
 import configobj
 
 import weewx
@@ -32,7 +33,7 @@ import weeutil.weeutil
 import user.skyfieldalmanac
 
 import numpy
-from skyfield.api import N, S, E, W, wgs84
+from skyfield.api import N, S, E, W, wgs84, EarthSatellite, Star
 from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 import skyfield.almanac
 import skyfield.units
@@ -58,6 +59,7 @@ def _get_config(config_dict):
     alm_conf_dict['enable'] = weeutil.weeutil.to_bool(conf_dict.get('enable',True))
     alm_conf_dict['log_success'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_success',True))
     alm_conf_dict['log_failure'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_failure',True))
+    alm_conf_dict['Formats'] = conf_dict.get('Formats',configobj.ConfigObj())
     return alm_conf_dict
 
 
@@ -101,12 +103,16 @@ class SkymapBinder:
         self.labels = labels
         self.log_failure = config_dict['log_failure']
         self.bodies = config_dict.get('bodies',['sun','moon','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter'])
+        self.earthsatellites = config_dict.get('earth_satellites',[])
+        self.show_stars = weeutil.weeutil.to_bool(config_dict.get('show_stars',True))
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
+        self.formats = config_dict['Formats']
         self.night_color = (0,0,64) # #000040
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
         self.inout = -1.0
         self.width = 800
+        self.magnitude = 6.0
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -167,6 +173,7 @@ class SkymapBinder:
         ordinates = almanac_obj.formatter.ordinate_names
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
         observer = SkymapBinder.get_observer(almanac_obj)
+        station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
         width = self.width if self.width else 800
         s = SkymapAlmanacType.SVG_START % (width,width)
         s += '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
@@ -181,9 +188,7 @@ class SkymapBinder:
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
-            rg = int(self.night_color[0]+dawn*dawn*(self.day_color[0]-self.night_color[0])/9.0)
-            b = int(self.night_color[2]+dawn*dawn*(self.day_color[2]-self.night_color[2])/9.0)
-            background_color = (rg,rg,b)
+            background = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
         background_color = "#%02X%02X%02X" % background_color
         s += '<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color
         # start clipping
@@ -215,22 +220,49 @@ class SkymapBinder:
             # label of the celestial pole
             s += '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
                 y1,txt)
+        # stars
+        df = user.skyfieldalmanac.stars
+        if df is not None and self.show_stars:
+            # filter
+            df = df[df['magnitude'] <= self.magnitude]
+            # create Star instance
+            selected_stars = Star.from_dataframe(df)
+            # calculate all the positions in the sky
+            apparent = observer.at(time_ti).observe(selected_stars).apparent()
+            alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+            for alt, az, distance, mag in zip(alts.degrees,azs.radians,distances.km,df['magnitude']):
+                if alt>=0:
+                    x,y = self.to_xy(alt,az)
+                    r = 0.7/mag if mag>0.7 else 0.7
+                    s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,'#ff0')
         # bodies
         dots = []
-        for body in self.bodies:
+        for body in (self.bodies+self.earthsatellites):
+            format = self.formats.get(body,self.formats.get('%s_*' % body.split('_')[0]))
             body_eph = user.skyfieldalmanac.ephemerides[body.lower()]
-            apparent = observer.at(time_ti).observe(body_eph).apparent()
+            if isinstance(body_eph,EarthSatellite):
+                apparent = (body_eph-station).at(time_ti)
+                label = '%s (#%s)' % (self.labels.get(body,body_eph.name),body_eph.model.satnum)
+                short_label = body_eph.name
+                if body_eph.name.startswith('GPS ') and '(PRN' in body_eph.name:
+                    i = body_eph.name.index('(PRN')
+                    if i>=0:
+                        short_label = body_eph.name[i+4:].split(')')[0].strip()
+            else:
+                apparent = observer.at(time_ti).observe(body_eph).apparent()
+                label = self.labels.get(body,body)
+                short_label = label
             alt, az, distance = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
             if alt.degrees>=0:
                 ra, dec, _ = apparent.radec('date')
                 x,y = self.to_xy(alt.degrees,az.radians)
                 dir = int(round(az.degrees/22.5,0))
                 if dir==16: dir = 0
-                txt = '%s\nh=%.1f&deg; a=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (self.labels.get(body,body),alt.degrees,az.degrees,ordinates[dir],ra.hours,dec.degrees)
+                txt = '%s\nh=%.1f&deg; a=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (label,alt.degrees,az.degrees,ordinates[dir],ra.hours,dec.degrees)
                 phase = None
                 if body=='sun':
                     radius = 16.0/60.0
-                    r = 3
+                    r = 4
                 elif body=='moon':
                     radius = skyfield.almanac._moon_radius_m/distance.m*RAD2DEG
                     r = 2
@@ -238,7 +270,13 @@ class SkymapBinder:
                     moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
                     ptext = almanac_obj.moon_phases[moon_index]
                     txt += '\n%s: %.0f&deg; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
-                elif body in ('mercury','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter'):
+                elif body in ('venus','venus_barycenter'):
+                    radius = None
+                    r = 1.0
+                elif body in ('mars','mars_barycenter','jupiter_barycenter'):
+                    radius = None
+                    r = 0.85
+                elif body in ('mercury','saturn_barycenter'):
                     radius = None
                     r = 0.75
                 else:
@@ -250,30 +288,27 @@ class SkymapBinder:
                     col = ['rgba(255,243,228,0.3)','#ffecd5']
                 else:
                     col = '#ffffff'
+                if format:
+                    if format[0]: r = weeutil.weeutil.to_float(format[0])
+                    if format[1] and format[1][0]=='#': col = format[1]
+                else:
+                    short_label = None
                 # According to ISO 31 the thousand separator is a thin space
                 # independent of language.
                 unit = almanac_obj.formatter.get_label_string("km")
                 if not unit: unit = " km"
-                txt += '\n{:}: {:_.0f} {:}'.format(self.labels.get('distance','distance').capitalize(),distance.km,unit).replace('_','&#8239;')
-                dots.append((txt,x,y,r,distance,col,radius,phase))
+                txt += '\n{:}: {:_.0f}{:}'.format(self.labels.get('distance','distance').capitalize(),distance.km,unit).replace('_','&#8239;')
+                dots.append((txt,x,y,r,distance,col,radius,phase,short_label))
         dots.sort(key=lambda x:-x[4].km)
         for dot in dots:
             if dot[7] is not None:
                 s += moon(*dot)
-                """
-                s += '<g><title>%s</title>' % dot[0]
-                s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (dot[1],dot[2],dot[3],dot[5][0])
-                phase = dot[7].degrees
-                desc = 0 if phase>180.0 else 1
-                quarter = 0 if 90<phase<270 else 1
-                s += '<path fill="%s" stroke="none" d="M%.4f,%.4fa%.4f,%.4f 0 %s 0 %.4f,%.4f' % (dot[5][1],dot[1],dot[2]-dot[3],dot[3],dot[3],desc,0,2*dot[3])
-                if round(phase,1)!=90.0 and round(phase,1)!=270.0:
-                    s += 'a%.4f,%.4f 0 %s 0 %.4f %.4f' % (0.5*dot[3],dot[3],quarter,0,-2*dot[3])
-                s += 'z" />\n'
-                s += '</g>'
-                """
             else:
-                s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none"><title>%s</title></circle>\n' % (dot[1],dot[2],dot[3],dot[5],dot[0])
+                s += '<g><title>%s</title>\n' % dot[0]
+                s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (dot[1],dot[2],dot[3],dot[5])
+                if dot[8] and len(dot[8])<=2:
+                    s += '<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[1],dot[2],dot[3]*1.2,dot[8])
+                s += '</g>\n'
         # end clipping
         s += '</g>\n'
         # azimuth scale
@@ -347,13 +382,13 @@ class MoonSymbolBinder:
         txt += '\n%s: %.0f&deg; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         return '%s%s%s' % (
             SkymapAlmanacType.SVG_START % (self.width,self.width),
-            moon(txt, 0, 0, 100, None, self.colors, None, phase),
+            moon(txt, 0, 0, 100, None, self.colors, None, phase,'moon'),
             SkymapAlmanacType.SVG_END
         )
         return s
 
 
-def moon(txt, x, y, r, distance, col, radius, phase):
+def moon(txt, x, y, r, distance, col, radius, phase, short_label):
     """ create SVG image of the moon showing her phase """
     phase = round(phase.degrees,1)%360
     full_moon = phase==180.0
@@ -376,18 +411,18 @@ def moon(txt, x, y, r, distance, col, radius, phase):
 def moonphasetest():
     """ test moon phases in the moon symbol """
     s = ""
-    s+=moon('30',-50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=30))
-    s+=moon('60',-30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=60))
-    s+=moon('90',-10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=90))
-    s+=moon('120',10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=120))
-    s+=moon('150',30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=150))
-    s+=moon('180',50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=180))
-    s+=moon('210',-50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=210))
-    s+=moon('240',-30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=240))
-    s+=moon('270',-10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=270))
-    s+=moon('300',10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=300))
-    s+=moon('330',30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=330))
-    s+=moon('360',50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=360))
+    s+=moon('30',-50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=30),'')
+    s+=moon('60',-30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=60),'')
+    s+=moon('90',-10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=90),'')
+    s+=moon('120',10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=120),'')
+    s+=moon('150',30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=150),'')
+    s+=moon('180',50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=180),'')
+    s+=moon('210',-50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=210),'')
+    s+=moon('240',-30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=240),'')
+    s+=moon('270',-10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=270),'')
+    s+=moon('300',10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=300),'')
+    s+=moon('330',30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=330),'')
+    s+=moon('360',50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=360),'')
     return s
 
 
@@ -398,7 +433,8 @@ class SkymapService(StdService):
         """ init this extension """
         super(SkymapService,self).__init__(engine, config_dict)
         # directory to save ephemeris and IERS files
-        self.path = config_dict.get('DatabaseTypes',configobj.ConfigObj()).get('SQLite',configobj.ConfigObj()).get('SQLITE_ROOT','.')
+        sqlite_root = config_dict.get('DatabaseTypes',configobj.ConfigObj()).get('SQLite',configobj.ConfigObj()).get('SQLITE_ROOT','.')
+        self.path = os.path.join(sqlite_root,'skyfield')
         # configuration
         alm_conf_dict = _get_config(config_dict)
         if alm_conf_dict['enable']:
