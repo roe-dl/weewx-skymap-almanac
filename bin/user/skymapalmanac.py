@@ -112,7 +112,7 @@ class SkymapBinder:
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
         self.inout = -1.0
         self.width = 800
-        self.magnitude = 6.0
+        self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -182,13 +182,16 @@ class SkymapBinder:
         if alt.degrees>(-0.27):
             # light day (sun above horizon)
             background_color = self.day_color
+            moon_background_color = '#f2ede6'
         elif alt.degrees<(-18):
             # dark night (sun below 18 degrees below the horizon)
             background_color = self.night_color
+            moon_background_color = '#2a2927'
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
             background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
+            moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(242,237,230))])
         background_color = "#%02X%02X%02X" % background_color
         s += '<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color
         # start clipping
@@ -225,7 +228,7 @@ class SkymapBinder:
         logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
         if df is not None and self.show_stars:
             # filter
-            df = df[df['magnitude'] <= self.magnitude]
+            df = df[df['magnitude'] <= self.max_magnitude]
             # create Star instance
             selected_stars = Star.from_dataframe(df)
             # calculate all the positions in the sky
@@ -286,7 +289,8 @@ class SkymapBinder:
                 if body in ('mars','mars_barycenter'):
                     col = '#ff8f5e'
                 elif body=='moon':
-                    col = ['rgba(255,243,228,0.3)','#ffecd5']
+                    #col = ['rgba(255,243,228,0.3)','#ffecd5']
+                    col = [moon_background_color,'#ffecd5']
                 else:
                     col = '#ffffff'
                 if format:

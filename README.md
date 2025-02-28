@@ -46,6 +46,53 @@ WeeWX from version 5.2 on and weewx-skyfield-almanac
    sudo systemctl start weewx
    ```
 
+## Configuration instructions
+
+There is no need to configure anything, but there are some tuning options
+available if you have special requirements.
+
+```
+[Almanac]
+    [[Skymap]]
+        # use this almanac
+        enable = true
+        # list of heavenly bodies to include in the map
+        bodies = ...
+        # list of earth satellites to include in the map
+        earth_satellites = ...
+        # maximum star magnitude to include in the map
+        max_magnitude = 6.0
+        # flag whether to include stars in the map
+        show_stars = true
+        # flag whether to include the timestamp
+        show_timestamp = true
+        # flag whether to include the location
+        show_location = true
+        # format options
+        [[[Formats]]]
+            object_name = size, color, ...
+```
+
+* `enable`: Enable this almanac extension.
+* `bodies`: List of heavenly bodies to include in the map. Optional.
+  Default the sun, the moon, and the well-known planets.
+  This can include all objects available in BSP files.
+* `earth_satellites`: List of earth satellites to include in the map.
+  Optional. Default no satellites.
+  The ID to use here contains of the file name of the
+  satellite data file (without file name extension) and
+  the catalog number of the satellite, connected by an underscore.
+* `max_magnitude`: Maximum star magnitude to include in the map.
+  Optional. Default 6.0.
+* `show_stars`: Flag whether to include stars in the map. Optional.
+  Default `True`.
+* `show_timestamp`: Flag whether to include the timestamp. Optional.
+  Default `True`.
+* `show_location`: Flag whether to include the location. Optional.
+  Default `True`.
+* `[[[Formats]]]`: Format options. Optional.
+  Each entry contains an object name and a list of options. 
+
 ## Usage
 
 ### Sky map
