@@ -70,6 +70,7 @@ available if you have special requirements.
         show_location = true
         # format options
         [[[Formats]]]
+            stars = mag, '#ff0'
             object_name = size, color, ...
 ```
 
@@ -83,7 +84,9 @@ available if you have special requirements.
   satellite data file (without file name extension) and
   the catalog number of the satellite, connected by an underscore.
 * `max_magnitude`: Maximum star magnitude to include in the map.
-  Optional. Default 6.0.
+  Optional. Default is 6.0. This is, how you would see the sky
+  in a clear night in the middle of nowhere. Try 4.0 if that
+  looks more the way you know the sky in the night to be.
 * `show_stars`: Flag whether to include stars in the map. Optional.
   Default `True`.
 * `show_timestamp`: Flag whether to include the timestamp. Optional.
@@ -91,7 +94,14 @@ available if you have special requirements.
 * `show_location`: Flag whether to include the location. Optional.
   Default `True`.
 * `[[[Formats]]]`: Format options. Optional.
-  Each entry contains an object name and a list of options. 
+  There are reasonable defaults. So you do not need this section at all.
+  But if you want to set up something special you can do it here.
+  Each entry contains an object name and a list of options. For example
+  the line `stars = mag, "#ff0"` says that the stars are to be drawn
+  with a diameter according to their magnitude and a color of yellow.
+  This is also the default if no option is specified. A line 
+  `mars_barycenter = 0.85, "#ff8f5e"` would draw the planet Mars
+  with a radius of 0.85 and a reddish color. This is the default, too.
 
 ## Usage
 
@@ -112,6 +122,18 @@ Add `$almanac.moon_symbol` to your skin.
 
 You can change the size of the symbol by setting the parameter `width` like
 `$almanac.moon_symbol(width=200)`.
+
+## Time
+
+The sky map image contains different timestamps:
+
+* **Solar time**: In the upper left corner you find the apparent solar time.
+  That is the time a sundial would show. It represents the position of the
+  sun in the sky.
+* **Sidereal time**: In the upper right corner you find the apparent 
+  sidereal time. 
+* **Civil time**: Civil time you find in the lower right corner together
+  with the date.
 
 ## Links
 
