@@ -337,7 +337,7 @@ class SkymapBinder:
                     radius = 16.0/60.0
                     r = 4
                 elif body=='moon':
-                    radius = skyfield.almanac._moon_radius_m/distance.m*RAD2DEG
+                    radius = _moon_radius_m/distance.m*RAD2DEG
                     r = 2
                     phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.sun_and_planets,time_ti)
                     moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
