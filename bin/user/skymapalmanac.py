@@ -38,6 +38,11 @@ from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 import skyfield.almanac
 import skyfield.units
 
+try:
+    _moon_radius_m = skyfield.almanac._moon_radius_m
+except AttributeError:
+    _moon_radius_m = 1.7374e6
+
 # Logging
 import weeutil.logger
 import logging
@@ -54,9 +59,11 @@ def logerr(msg):
 
 def _get_config(config_dict):
     """ get almanac configuration """
-    conf_dict = config_dict.get('Almanac',configobj.ConfigObj()).get('Skymap',configobj.ConfigObj())
+    conf_dict = config_dict.get('Almanac',configobj.ConfigObj())
+    enable_skyfield = weeutil.weeutil.to_bool(conf_dict.get('Skyfield',configobj.ConfigObj()).get('enable',True))
+    conf_dict = conf_dict.get('Skymap',configobj.ConfigObj())
     alm_conf_dict = weeutil.config.accumulateLeaves(conf_dict)
-    alm_conf_dict['enable'] = weeutil.weeutil.to_bool(conf_dict.get('enable',True))
+    alm_conf_dict['enable'] = weeutil.weeutil.to_bool(conf_dict.get('enable',True)) and enable_skyfield
     alm_conf_dict['log_success'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_success',True))
     alm_conf_dict['log_failure'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_failure',True))
     alm_conf_dict['Formats'] = conf_dict.get('Formats',configobj.ConfigObj())
@@ -84,16 +91,22 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             user.skyfieldalmanac.ephemerides is None):
             raise weewx.UnknownType(attr)
         
-        # TODO: get this from the skin
-        labels = {'sun':'Sonne','moon':'Mond','venus':'Venus','mars_barycenter':'Mars','jupiter_barycenter':'Jupiter','saturn_barycenter':'Saturn','neptune_barycenter':'Neptun','pluto_barycenter':'Pluto','distance':'Entfernung','Sidereal time':'Sternzeit','Solar time':'Sonnenzeit'}
-        
         if attr=='skymap':
-            return SkymapBinder(self.config_dict, self.station_location, almanac_obj, labels)
+            return SkymapBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='moon_symbol':
-            return MoonSymbolBinder(almanac_obj, labels, ['rgba(255,243,228,0.5)','#ffecd5'])
+            return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), ['rgba(255,243,228,0.5)','#ffecd5'])
 
         raise weewx.UnknownType(attr)
 
+    def get_labels(self, almanac_obj):
+        # TODO: get this from the skin
+        labels = {'sun':'Sun','moon':'Moon','mercury':'Mercury','venus':'Venus','mars_barycenter':'Mars','jupiter_barycenter':'Jupiter','saturn_barycenter':'Saturn','neptune_barycenter':'Neptune','pluto_barycenter':'Pluto'}
+        new_moon = almanac_obj.moon_phases[0]
+        for lang, val in self.config_dict['Texts'].items():
+            if val['moon_phase_new_moon']==new_moon:
+                labels.update(val)
+                break
+        return labels
 
 class SkymapBinder:
     """ SVG map of the sky showing the position of heavenly bodies """
@@ -166,6 +179,32 @@ class SkymapBinder:
         """
         alt = 90-alt
         return self.inout*alt*numpy.sin(az),-alt*numpy.cos(az)
+    
+    @staticmethod
+    def four_pointed_star(x,y,r,color):
+        return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
+
+    def circle_of_right_ascension(self, observer, almanac_obj, time_ti):
+        """ draw circle of that declination that touches the horizon 
+        
+            It is not really a circle, not even an ellipse. But it is near.
+            The hours are the current right ascension. Stars move very
+            very slowly only in respect of right ascension and declination.
+        """
+        s = ""
+        hours = numpy.arange(24)
+        body = Star(ra_hours=numpy.arange(24),dec_degrees=numpy.array([90-almanac_obj.lat]*24),epoch=time_ti)
+        apparent = observer.at(time_ti).observe(body).apparent()
+        alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        for alt, az, hour in zip(alts.degrees,azs.radians,hours):
+            x,y = self.to_xy(alt,az)
+            #dir = numpy.arctan2(x,y+90-almanac_obj.lat)
+            #s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if i!=0 else 1,'#808080',alt,az*RAD2DEG)
+            #r = 1 if hour!=0 else 2
+            #s += SkymapBinder.four_pointed_star(x,y,r,'#808080')
+            #s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M%.4f,%.4fl%.4f,%.4fM%.4f,%.4fl%.4f,%.4f" />\n' % ()
+            s += '<text x="%.4f" y="%.4f" font-size="3" fill="#808080" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour)
+        return s
 
     def get_text(self, text):
         return self.labels.get(text,text)
@@ -220,16 +259,18 @@ class SkymapBinder:
             y1 = almanac_obj.lat-90 if almanac_obj.lat>=0 else 90+almanac_obj.lat
             # northern or southern hemisphere
             y2 = 0 if almanac_obj.lat>=0 else 1
+            # semi-major axis
+            x1 = 90.0/numpy.cos(numpy.arcsin((90.0-abs(almanac_obj.lat))/90.0))
             # name of the celestial pole
             txt = ordinates[0 if almanac_obj.lat>=0 else 8]
             # mark of celestial pole and line of celestial equator
             s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
-                y1,
-                90.0/numpy.cos(numpy.arcsin((90.0-abs(almanac_obj.lat))/90.0)),
-                y2)
+                y1,x1,y2)
             # label of the celestial pole
             s += '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
                 y1,txt)
+            # circle of right ascension
+            s += self.circle_of_right_ascension(observer, almanac_obj, time_ti)
         # stars
         df = user.skyfieldalmanac.stars
         logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
@@ -253,7 +294,9 @@ class SkymapBinder:
                     x,y = self.to_xy(alt,az)
                     if varsize: r = 0.7/mag if mag>0.7 else 0.7
                     if r>0.6 or hip==11767:
-                        txt = '><title>HIP%s</title></circle>' % hip
+                        txt = user.skyfieldalmanac.hip_to_starname(hip,'')
+                        if txt: txt += '\n'
+                        txt = '><title>%sHIP%s</title></circle>' % (txt,hip)
                     else:
                         txt = ' />'
                     s += '<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt)
@@ -271,6 +314,13 @@ class SkymapBinder:
                     i = body_eph.name.index('(PRN')
                     if i>=0:
                         short_label = body_eph.name[i+4:].split(')')[0].strip()
+                elif '(GALILEO' in body_eph.name:
+                    i = body_eph.name.index('(GALILEO')
+                    if body_eph.name[i+8]=='-': i += 1
+                    short_label = body_eph.name[i+8:].split(')')[0].strip()
+                elif body_eph.name.startswith('METEOSAT-'):
+                    i = body_eph.name.index('(MSG-')
+                    short_label = body_eph.name[i+5:].split(')')[0].strip()
             else:
                 apparent = observer.at(time_ti).observe(body_eph).apparent()
                 label = self.get_text(body)
@@ -321,7 +371,7 @@ class SkymapBinder:
                 # independent of language.
                 unit = almanac_obj.formatter.get_label_string("km")
                 if not unit: unit = " km"
-                txt += '\n{:}: {:_.0f}{:}'.format(self.get_text('distance').capitalize(),distance.km,unit).replace('_','&#8239;')
+                txt += '\n{:}: {:_.0f}{:}'.format(self.get_text('Distance').capitalize(),distance.km,unit).replace('_','&#8239;')
                 dots.append((body,txt,x,y,r,distance,col,radius,phase,short_label))
         dots.sort(key=lambda x:-x[5].km)
         for dot in dots:
@@ -392,7 +442,7 @@ class SkymapBinder:
         #s += moonphasetest()
         datasource = ['IERS']
         if self.bodies: datasource.append('JPL')
-        if self.show_stars: datasource.append('Hipparcos')
+        if self.show_stars: datasource.append('ESA') # Hipparcos
         if self.earthsatellites: datasource.append('CelesTrak')
         s += '<text x="-97" y="97" font-size="3" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_text('Data source'),', '.join(datasource))
         s += '<text x="97" y="97" font-size="3" fill="#808080" text-anchor="end">%s</text>\n' % self.credits
@@ -483,6 +533,7 @@ class SkymapService(StdService):
         # configuration
         alm_conf_dict = _get_config(config_dict)
         if alm_conf_dict['enable']:
+            alm_conf_dict['Texts'] = self.process_language(config_dict)
             # instantiate the Skymap almanac
             self.skymap_almanac = SkymapAlmanacType(alm_conf_dict, self.path, engine.stn_info.location)
             # add to the list of almanacs
@@ -500,3 +551,88 @@ class SkymapService(StdService):
         del weewx.almanac.almanacs[idx]
         # stop thread
         logdbg("%s stopped" % self.__class__.__name__)
+
+    def process_language(self, config_dict):
+        """ get language dependend words
+        
+            Unfortunately `$alamanac` does only provide language dependend 
+            words for the moon phases and the compass directions. The skin's
+            language configuration data is not available. This is the
+            workaround.
+            
+            This method searches the WeeWX configuration (which is derived 
+            from `weewx.conf`) for all language codes used. Then it loads
+            the respective language files for the Seasons skin and extracts
+            words used in astronomy or almanac.
+            
+            List of the planets' names in different languages:
+            https://en.wiktionary.org/wiki/Appendix:Planets
+        """
+        languages = []
+        lang_dict = dict()
+        # Report configuration section
+        rpt_conf_dict = config_dict.get('StdReport',configobj.ConfigObj())
+        # Skins directory
+        skin_root = rpt_conf_dict.get('SKIN_ROOT')
+        skin_root = os.path.join(config_dict.get('WEEWX_ROOT','.'),skin_root)
+        # Search configuration for language codes
+        for rpt in rpt_conf_dict.sections:
+            if 'lang' in rpt_conf_dict[rpt]:
+                languages.append(rpt_conf_dict[rpt]['lang'])
+        languages = set(languages)
+        logdbg('languages used in this WeeWX instance: %s' % languages)
+        for lang in languages:
+            conf = dict()
+            if lang=='en' or lang.startswith('en_'):
+                conf.update({
+                    'Solar time':'Solar time',
+                    'Sidereal time':'Sidereal time',
+                    'Distance':'Distance',
+                    'Data source':'Data source',
+                    'Magnitude':'Magnitude'
+                })
+            if lang=='de' or lang.startswith('de_'):
+                conf.update({
+                    'Solar time':'Sonnenzeit',
+                    'Sidereal time':'Sternzeit',
+                    'Distance':'Entfernung',
+                    'Data source':'Datenquelle',
+                    'Magnitude':'Magnitude',
+                    # planet names that are different from English
+                    'mercury':'Merkur',
+                    'mercury_barycenter':'Merkur',
+                    'neptune':'Neptun',
+                    'neptune_barycenter':'Neptun',
+                })
+            skin = os.path.join(skin_root,'Seasons','lang')
+            try:
+                data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang))
+                if data:
+                    # used for determining skin language
+                    conf['hour'] = data.get('Units',dict()).get('Labels',dict()).get('hour')
+                    conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
+                    # get language dependend texts used in astronomy
+                    x = data.get('Texts',dict())
+                    for key in ('Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time'):
+                        if key in x:
+                            conf[key] = x[key]
+                    for key in ('Sun','Moon'):
+                        if key in x:
+                            conf[key.lower()] = x[key]
+                    # The language files of the Seasons skin contain an "Astronomical" section
+                    astro = x.get('Astronomical',dict())
+                    # Astronomical altitude and magnitude
+                    for key in ('Altitude','Magnitude','Solar time','Sidereal time'):
+                        if astro.get(key):
+                            conf[key] = astro.get(key)
+                    # Names of the planets
+                    # Note: We need the planets' names in lowercase.
+                    for key in ('Mercury','Earth','Mars','Venus','Jupiter','Saturn','Neptune','Pluto','Ceres'):
+                        if key in astro:
+                            conf[key.lower()] = astro[key]
+                            conf[key.lower()+'_barycenter'] = astro[key]
+            except (OSError,ValueError) as e:
+                logerr("languge '%s'; %s - %s" % (lang,e.__class__.__name__,e))
+            logdbg('%s: %s' % (lang,conf))
+            lang_dict[lang] = conf
+        return lang_dict

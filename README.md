@@ -87,6 +87,7 @@ available if you have special requirements.
   Optional. Default is 6.0. This is, how you would see the sky
   in a clear night in the middle of nowhere. Try 4.0 if that
   looks more the way you know the sky in the night to be.
+  Please note, the larger the magnitude, the fainter the star.
 * `show_stars`: Flag whether to include stars in the map. Optional.
   Default `True`.
 * `show_timestamp`: Flag whether to include the timestamp. Optional.
