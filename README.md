@@ -103,6 +103,9 @@ available if you have special requirements.
   This is also the default if no option is specified. A line 
   `mars_barycenter = 0.85, "#ff8f5e"` would draw the planet Mars
   with a radius of 0.85 and a reddish color. This is the default, too.
+  For earth satellites a third parameter is possible describing the
+  shape of the representation of the object. For example it can be
+  `round` or `square`.
 
 ## Usage
 
