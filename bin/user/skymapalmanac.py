@@ -118,7 +118,7 @@ class SkymapBinder:
         self.almanac_obj = almanac_obj
         self.labels = labels
         self.log_failure = config_dict['log_failure']
-        self.bodies = config_dict.get('bodies',['sun','moon','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter'])
+        self.bodies = config_dict.get('bodies',['sun','moon','mercury','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter'])
         self.earthsatellites = config_dict.get('earth_satellites',[])
         self.show_stars = weeutil.weeutil.to_bool(config_dict.get('show_stars',True))
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
@@ -129,6 +129,7 @@ class SkymapBinder:
         self.inout = -1.0
         self.width = 800
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
+        self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.1))
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -149,7 +150,7 @@ class SkymapBinder:
                 self.inout = 1.0 if kwargs[key] else -1.0
             elif key=='bodies':
                 self.bodies = list(kwargs[key])
-            elif key=='max_magnitude':
+            elif key in ('max_magnitude','star_tooltip_max_magnitude'):
                 setattr(self,key,weeutil.weeutil.to_float(kwargs[key]))
             else:
                 setattr(self,key,kwargs[key])
@@ -182,6 +183,12 @@ class SkymapBinder:
         return self.inout*alt*numpy.sin(az),-alt*numpy.cos(az)
     
     @staticmethod
+    def magnitude_to_r(magnitude):
+        r = (6.0-magnitude)*0.1
+        if r<0.1: r = 0.1
+        return r
+    
+    @staticmethod
     def four_pointed_star(x,y,r,color):
         return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
 
@@ -194,17 +201,21 @@ class SkymapBinder:
         """
         s = ""
         hours = numpy.arange(24)
-        body = Star(ra_hours=numpy.arange(24),dec_degrees=numpy.array([90-almanac_obj.lat]*24),epoch=time_ti)
+        dec = numpy.array([(90-abs(almanac_obj.lat))*(1 if almanac_obj.lat>=0 else -1)]*24)
+        above20 = abs(almanac_obj.lat)>20
+        body = Star(ra_hours=hours,dec_degrees=dec,epoch=time_ti)
         apparent = observer.at(time_ti).observe(body).apparent()
         alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
         for alt, az, hour in zip(alts.degrees,azs.radians,hours):
             x,y = self.to_xy(alt,az)
             #dir = numpy.arctan2(x,y+90-almanac_obj.lat)
-            #s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if i!=0 else 1,'#808080',alt,az*RAD2DEG)
             #r = 1 if hour!=0 else 2
             #s += SkymapBinder.four_pointed_star(x,y,r,'#808080')
             #s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M%.4f,%.4fl%.4f,%.4fM%.4f,%.4fl%.4f,%.4f" />\n' % ()
-            s += '<text x="%.4f" y="%.4f" font-size="3" fill="#808080" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour)
+            if above20:
+                s += '<text x="%.4f" y="%.4f" font-size="3" fill="#808080" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour)
+            else:
+                s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if hour!=0 else 1,'#808080',alt,az*RAD2DEG)
         return s
 
     def get_text(self, text):
@@ -217,13 +228,16 @@ class SkymapBinder:
             planets are included in the map all day long. The diameter
             of the bodies is not according to scale.
         """
+        time0_ts = time.thread_time_ns()*0.000001
         ordinates = almanac_obj.formatter.ordinate_names
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
         observer = SkymapBinder.get_observer(almanac_obj)
         station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
         width = self.width if self.width else 800
-        s = SkymapAlmanacType.SVG_START % (width,width)
-        s += '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
+        s = [
+            SkymapAlmanacType.SVG_START % (width,width),
+            '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
+        ]
         # background
         alt, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().altaz()
         if alt.degrees>(-0.27):
@@ -240,19 +254,19 @@ class SkymapBinder:
             background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
             moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
         background_color = "#%02X%02X%02X" % background_color
-        s += '<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color
+        s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
         # start clipping
-        s += '<g clip-path="url(#weewxskymapbackgroundclippath)">\n'
+        s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
         # altitude scale
-        s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180'
+        s.append('<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180')
         for i in range(11):
             if i!=5:
-                s += 'M%s,-1.5v3M-1.5,%sh3' % (i*15-75,i*15-75)
-        s += '" />\n'
+                s.append('M%s,-1.5v3M-1.5,%sh3' % (i*15-75,i*15-75))
+        s.append('" />\n')
         for i in range(11):
             if i!=5:
-                s += '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&deg;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15)
-                s += '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&deg;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15)
+                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&deg;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
+                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&deg;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
         # celestial pole and equator
         # displayed for latitude more than 5 degrees north or south only
         if abs(almanac_obj.lat)>5.0:
@@ -265,13 +279,16 @@ class SkymapBinder:
             # name of the celestial pole
             txt = ordinates[0 if almanac_obj.lat>=0 else 8]
             # mark of celestial pole and line of celestial equator
-            s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
-                y1,x1,y2)
+            s.append(
+                '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
+                y1,x1,y2))
             # label of the celestial pole
-            s += '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
-                y1,txt)
+            s.append( 
+                '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
+                y1,txt))
             # circle of right ascension
-            s += self.circle_of_right_ascension(observer, almanac_obj, time_ti)
+            s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
+        time1_ts = time.thread_time_ns()*0.000001
         # stars
         df = user.skyfieldalmanac.stars
         logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
@@ -282,7 +299,7 @@ class SkymapBinder:
             if not varsize:
                 r = weeutil.weeutil.to_float(format[0])
             col = format[1]
-            s += '<g fill="%s" stroke="none">\n' % col
+            s.append('<g fill="%s" stroke="none">\n' % col)
             # filter
             df = df[df['magnitude'] <= self.max_magnitude]
             # create Star instance
@@ -294,14 +311,16 @@ class SkymapBinder:
                 if alt>=0:
                     x,y = self.to_xy(alt,az)
                     if varsize: r = 0.7/mag if mag>0.7 else 0.7
-                    if r>0.6 or hip==11767:
+                    if varsize: r = SkymapBinder.magnitude_to_r(mag)
+                    if mag<=self.star_tooltip_max_magnitude:
                         txt = user.skyfieldalmanac.hip_to_starname(hip,'')
                         if txt: txt += '\n'
                         txt = '><title>%sHIP%s\n%s: %.2f</title></circle>' % (txt,hip,self.get_text('Magnitude'),mag)
                     else:
                         txt = ' />'
-                    s += '<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt)
-            s += '</g>\n'
+                    s.append('<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt))
+            s.append('</g>\n')
+        time2_ts = time.thread_time_ns()*0.000001
         # bodies
         dots = []
         for body in (self.bodies+self.earthsatellites):
@@ -340,27 +359,29 @@ class SkymapBinder:
                 txt = '%s\nh=%.1f&deg; a=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (label,alt.degrees,az.degrees,ordinates[dir],ra.hours,dec.degrees)
                 phase = None
                 if body=='sun':
+                    # sun
                     radius = 16.0/60.0
                     r = 4
                 elif body=='moon':
+                    # earth moon
                     radius = _moon_radius_m/distance.m*RAD2DEG
                     r = 2
                     phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.sun_and_planets,time_ti)
                     moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
                     ptext = almanac_obj.moon_phases[moon_index]
                     txt += '\n%s: %.0f&deg; %s' % (self.get_text('Phase').capitalize(),phase.degrees,ptext)
-                elif body in ('venus','venus_barycenter'):
+                elif body in user.skyfieldalmanac.planets_list and magnitude is not None:
+                    # planets other than earth
                     radius = None
-                    r = 1.0
-                elif body in ('mars','mars_barycenter','jupiter_barycenter'):
-                    radius = None
-                    r = 0.85
-                elif body in ('mercury','saturn_barycenter'):
-                    radius = None
-                    r = 0.75
+                    r = SkymapBinder.magnitude_to_r(magnitude)
+                    """
+                    r = (6.0-magnitude)*0.1
+                    if r<0.2: r = 0.2
+                    """
                 else:
+                    # other heavenly objects including Pluto
                     radius = None
-                    r = 0.5
+                    r = 0.2
                 if body in ('mars','mars_barycenter'):
                     col = '#ff8f5e'
                 elif body=='moon':
@@ -386,29 +407,37 @@ class SkymapBinder:
                 if magnitude:
                    txt += '\n%s: %.2f' % (self.get_text('Magnitude'),magnitude)
                 dots.append((body,txt,x,y,r,distance,col,radius,phase,short_label,shape))
+        time3_ts = time.thread_time_ns()*0.000001
         dots.sort(key=lambda x:-x[5].km)
         for dot in dots:
             if dot[0]=='moon':
-                s += moon(*dot)
+                s.append(moon(*dot))
             else:
-                s += '<g id="%s"><title>%s</title>\n' % (dot[0],dot[1])
+                s.append('<g id="%s"><title>%s</title>\n' % (dot[0],dot[1]))
                 if dot[10]=='square':
-                    s += '<rect x="%.4f" y="%.4f" width="%.4f" height="%.4f" fill="%s" stroke="none" />\n' % (dot[2]-dot[4],dot[3]-dot[4],2*dot[4],2*dot[4],dot[6])
+                    s.append('<rect x="%.4f" y="%.4f" width="%.4f" height="%.4f" fill="%s" stroke="none" />\n' % (dot[2]-dot[4],dot[3]-dot[4],2*dot[4],2*dot[4],dot[6]))
+                elif dot[10]=='rhombus':
+                    a2 = 1.414213562373095*dot[4]
+                    s.append('<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f%.4fz" />\n' % (dot[6],dot[2],dot[3]-a2,a2,a2,-a2,a2,-a2,-a2))
+                elif dot[10]=='triangle':
+                    a2 = 0.866025403784439*dot[4]
+                    s.append('<path fill="%s" stroke="none" d="M%.4f,%.4fh%.4fl%.4f,%.4fz" />\n' % (dot[6],dot[2]-a2,dot[3]+0.5*dot[4],2*a2,-a2,-1.5*dot[4]))
                 else:
-                    s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (dot[2],dot[3],dot[4],dot[6])
+                    s.append( '<circle cx="%.4f" cy="%.4f" r="%.2f" fill="%s" stroke="none" />\n' % (dot[2],dot[3],dot[4],dot[6]))
                 if dot[9] and len(dot[9])<=2:
-                    s += '<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9])
-                s += '</g>\n'
+                    s.append('<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9]))
+                s.append('</g>\n')
+        time4_ts = time.thread_time_ns()*0.000001
         # end clipping
-        s += '</g>\n'
+        s.append('</g>\n')
         # azimuth scale
-        s += '<path fill="none" stroke="currentColor" stroke-width="0.4" d="'
+        s.append('<path fill="none" stroke="currentColor" stroke-width="0.4" d="')
         for i in range(24):
             azh = i*15*DEG2RAD
             x1,y1 = self.to_xy(0,azh)
             x2,y2 = self.to_xy(-3,azh)
-            s += "M%.4f,%.4fL%.4f,%.4f" % (x1,y1,x2,y2)
-        s += '" />\n'
+            s.append("M%.4f,%.4fL%.4f,%.4f" % (x1,y1,x2,y2))
+        s.append('" />\n')
         for i in range(24):
             azh = i*15*DEG2RAD
             if i==19 or i==7:
@@ -429,41 +458,43 @@ class SkymapBinder:
                 x += 2*self.inout
             else:
                 txt = "%d°" % (i*15)
-            s += '<text x="%.4f" y="%.4f" style="font-size:5px" fill="currentColor" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (x,y,txt)
+            s.append('<text x="%.4f" y="%.4f" style="font-size:5px" fill="currentColor" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (x,y,txt))
         if self.show_timestamp:
             # sidereal time
             sidereal_time = station.lst_hours_at(time_ti)*3600
             sd = time.strftime("%H:%M:%S",time.gmtime(sidereal_time))
-            s += '<text x="97" y="-93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % self.get_text('Sidereal time')
-            s += '<text x="97" y="-87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % sd
+            s.append('<text x="97" y="-93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % self.get_text('Sidereal time'))
+            s.append('<text x="97" y="-87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % sd)
             # solar time
-            ha, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).hadec()
+            ha, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().hadec()
             solar_time = (ha.hours-12.0)*3600
             sd = time.strftime("%H:%M:%S",time.gmtime(solar_time))
-            s += '<text x="-97" y="-93" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.get_text('Solar time')
-            s += '<text x="-97" y="-87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % sd
+            s.append('<text x="-97" y="-93" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.get_text('Solar time'))
+            s.append('<text x="-97" y="-87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % sd)
             # civil time
             time_vt = ValueHelper(ValueTuple(almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_year',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             time_s = str(time_vt).split(' ')
-            s += '<text x="97" dy="87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[0]
+            s.append('<text x="97" dy="87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[0])
             if len(time_s)>1 and time_s[1]:
-                s += '<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1]
+                s.append('<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1])
         if self.show_location:
             lat_vt = ValueHelper(ValueTuple(almanac_obj.lat,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lon_vt = ValueHelper(ValueTuple(almanac_obj.lon,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lat_s = lat_vt.format("%8.4f").replace(' ','&numsp;')
             lon_s = lon_vt.format("%08.4f")
-            s += '<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lat_s,ordinates[0 if almanac_obj.lat>=0 else 8])
-            s += '<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lon_s,ordinates[4 if almanac_obj.lon>=0 else 12])
-        #s += moonphasetest()
+            s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lat_s,ordinates[0 if almanac_obj.lat>=0 else 8]))
+            s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
+        #s.append(moonphasetest())
         datasource = ['IERS']
         if self.bodies: datasource.append('JPL')
         if self.show_stars: datasource.append('ESA') # Hipparcos
         if self.earthsatellites: datasource.append('CelesTrak')
-        s += '<text x="-97" y="97" font-size="3" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_text('Data source'),', '.join(datasource))
-        s += '<text x="97" y="97" font-size="3" fill="#808080" text-anchor="end">%s</text>\n' % self.credits
-        s += SkymapAlmanacType.SVG_END
-        return s
+        s.append('<text x="-97" y="97" font-size="3" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_text('Data source'),', '.join(datasource)))
+        s.append('<text x="97" y="97" font-size="3" fill="#808080" text-anchor="end">%s</text>\n' % self.credits)
+        s.append(SkymapAlmanacType.SVG_END)
+        time5_ts = time.thread_time_ns()*0.000001
+        logdbg("skymap %s %s %s %s %s" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts,time5_ts-time4_ts))
+        return ''.join(s)
 
 
 class MoonSymbolBinder:
@@ -504,20 +535,20 @@ def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
     phase = round(phase.degrees,1)%360
     full_moon = phase==180.0
     new_moon = phase==0.0
-    s = ""
-    s += '<g><title>%s</title>\n' % txt
-    s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col[1] if full_moon else col[0])
+    s = []
+    s.append('<g><title>%s</title>\n' % txt)
+    s.append('<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col[1] if full_moon else col[0]))
     if not full_moon and not new_moon:
         desc = 0 if phase>180.0 else 1
         phase180 = phase%180
         quarter = 0 if phase180<90 else 1
         fullness = (phase180-90.0 if phase180>90.0 else 90.0-phase180)/90.0
-        s += '<path fill="%s" stroke="none" d="M%.4f,%.4fa%.4f,%.4f 0 0 %s %.4f,%.4f' % (col[1],x,y-r,r,r,desc,0,2*r)
+        s.append('<path fill="%s" stroke="none" d="M%.4f,%.4fa%.4f,%.4f 0 0 %s %.4f,%.4f' % (col[1],x,y-r,r,r,desc,0,2*r))
         if phase!=90.0 and phase!=270.0:
-            s += 'a%.4f,%.4f 0 0 %s %.4f %.4f' % (fullness*r,r,quarter,0,-2*r)
-        s += 'z" />\n'
-    s += '</g>\n'
-    return s
+            s.append('a%.4f,%.4f 0 0 %s %.4f %.4f' % (fullness*r,r,quarter,0,-2*r))
+        s.append('z" />\n')
+    s.append('</g>\n')
+    return ''.join(s)
     
 def moonphasetest():
     """ test moon phases in the moon symbol """

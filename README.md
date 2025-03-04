@@ -88,6 +88,8 @@ available if you have special requirements.
   in a clear night in the middle of nowhere. Try 4.0 if that
   looks more the way you know the sky in the night to be.
   Please note, the larger the magnitude, the fainter the star.
+* `star_tooltip_max_magnitude`: Stars get a tooltip if their magnitude
+  is less than this value. Optional. Default is 2.1. 
 * `show_stars`: Flag whether to include stars in the map. Optional.
   Default `True`.
 * `show_timestamp`: Flag whether to include the timestamp. Optional.
@@ -105,7 +107,7 @@ available if you have special requirements.
   with a radius of 0.85 and a reddish color. This is the default, too.
   For earth satellites a third parameter is possible describing the
   shape of the representation of the object. For example it can be
-  `round` or `square`.
+  `round`, `triangle`, `square`, or `rhombus`.
 
 ## Usage
 
@@ -143,3 +145,5 @@ The sky map image contains different timestamps:
 
 * [WeeWX](https://weewx.com)
 * [weewx-skyfield-almanac](https://github.com/roe-dl/weewx-skyfield-almanac)
+* [List of brightest stars](https://en.wikipedia.org/wiki/List_of_brightest_stars)
+* [Liste der hellsten Sterne](https://de.wikipedia.org/wiki/Liste_der_hellsten_Sterne)
