@@ -68,6 +68,8 @@ available if you have special requirements.
         show_timestamp = true
         # flag whether to include the location
         show_location = true
+        # flag whether to show the ecliptic as a dotted line
+        show_ecliptic = true
         # format options
         [[[Formats]]]
             stars = mag, '#ff0'
@@ -96,6 +98,8 @@ available if you have special requirements.
   Default `True`.
 * `show_location`: Flag whether to include the location. Optional.
   Default `True`.
+* `show_ecliptic`: Flag whether to show the ecliptic as a dotted line.
+  Optional. Default `True`.
 * `[[[Formats]]]`: Format options. Optional.
   There are reasonable defaults. So you do not need this section at all.
   But if you want to set up something special you can do it here.

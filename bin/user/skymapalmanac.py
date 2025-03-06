@@ -36,6 +36,7 @@ import numpy
 from skyfield.api import N, S, E, W, wgs84, EarthSatellite, Star
 from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 from skyfield.magnitudelib import planetary_magnitude
+from skyfield.positionlib import position_of_radec
 import skyfield.almanac
 import skyfield.units
 
@@ -123,6 +124,7 @@ class SkymapBinder:
         self.show_stars = weeutil.weeutil.to_bool(config_dict.get('show_stars',True))
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
+        self.show_ecliptic = weeutil.weeutil.to_bool(config_dict.get('show_ecliptic',True))
         self.formats = config_dict['Formats']
         self.night_color = (0,0,64) # #000040
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
@@ -144,7 +146,7 @@ class SkymapBinder:
         for key in kwargs:
             if key=='width':
                 self.width = weeutil.weeutil.to_int(kwargs[key])
-            elif key in ('show_timestamp','show_location'):
+            elif key in ('show_stars','show_timestamp','show_location','show_ecliptic'):
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
             elif key=='fromoutside':
                 self.inout = 1.0 if kwargs[key] else -1.0
@@ -199,7 +201,7 @@ class SkymapBinder:
             The hours are the current right ascension. Stars move very
             very slowly only in respect of right ascension and declination.
         """
-        s = ""
+        s = ['<g id="circle_of_right_ascension" fill="%s">\n' % '#808080']
         hours = numpy.arange(24)
         dec = numpy.array([(90-abs(almanac_obj.lat))*(1 if almanac_obj.lat>=0 else -1)]*24)
         above20 = abs(almanac_obj.lat)>20
@@ -213,10 +215,42 @@ class SkymapBinder:
             #s += SkymapBinder.four_pointed_star(x,y,r,'#808080')
             #s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M%.4f,%.4fl%.4f,%.4fM%.4f,%.4fl%.4f,%.4f" />\n' % ()
             if above20:
-                s += '<text x="%.4f" y="%.4f" font-size="3" fill="#808080" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour)
+                s.append('<text x="%.4f" y="%.4f" font-size="3" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour))
             else:
-                s += '<circle cx="%.4f" cy="%.4f" r="%s" fill="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if hour!=0 else 1,'#808080',alt,az*RAD2DEG)
-        return s
+                s.append('<circle cx="%.4f" cy="%.4f" r="%s"><title>alt=%.4f az=%.4f</title></circle>\n' % (x,y,0.5 if hour!=0 else 1,alt,az*RAD2DEG))
+        s.append('</g>\n')
+        return ''.join(s)
+    
+    def circle_of_ecliptic(self, observer, almanac_obj, time_ti):
+        """ draw circle of ecliptic 
+        
+            This draws a dotted line with each dot 1 day apart from the other
+            one.
+        """
+        time0_ts = time.thread_time_ns()*0.000001
+        s =['<g id="circle_of_ecliptic" fill="%s" stroke="none">\n' % '#800080']
+        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i-182 for i in range(364)])
+        ra, dec, _ = observer.at(days).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().radec('date')
+        time1_ts = time.thread_time_ns()*0.000001
+        dots = Star(ra_hours=ra.hours,dec_degrees=dec.degrees,epoch=time_ti)
+        apparent = observer.at(time_ti).observe(dots).apparent()
+        time2_ts = time.thread_time_ns()*0.000001
+        alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        time3_ts = time.thread_time_ns()*0.000001
+        for alt, az, day in zip(alts.degrees,azs.radians,days):
+            if alt>=0:
+                x,y = self.to_xy(alt,az)
+                s.append('<circle cx="%.4f" cy="%.4f" r="%s" />\n' % (x,y,0.2))
+        time4_ts = time.thread_time_ns()*0.000001
+        # first point of Aries (spring equinox)
+        dot = Star(ra_hours=0,dec_degrees=0,epoch=time_ti)
+        apparent = observer.at(time_ti).observe(dot).apparent()
+        alt, az, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        x,y = self.to_xy(alt.degrees,az.radians)
+        s.append('<circle cx="%.4f" cy="%.4f" r="%s"><title>%s</title></circle>\n' % (x,y,0.5,self.get_text('First point of Aries')))
+        logdbg("ecliptic elapsed CPU time %.3fµs %.3fµs %.3fµs %.3fµs" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
+        s.append('</g>\n')
+        return ''.join(s)
 
     def get_text(self, text):
         return self.labels.get(text,text)
@@ -228,6 +262,7 @@ class SkymapBinder:
             planets are included in the map all day long. The diameter
             of the bodies is not according to scale.
         """
+        log_start_ts = time.time()
         time0_ts = time.thread_time_ns()*0.000001
         ordinates = almanac_obj.formatter.ordinate_names
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
@@ -289,6 +324,10 @@ class SkymapBinder:
             # circle of right ascension
             s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
         time1_ts = time.thread_time_ns()*0.000001
+        # ecliptic
+        if self.show_ecliptic:
+            s.append(self.circle_of_ecliptic(observer, almanac_obj, time_ti))
+        time2_ts = time.thread_time_ns()*0.000001
         # stars
         df = user.skyfieldalmanac.stars
         logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
@@ -320,7 +359,7 @@ class SkymapBinder:
                         txt = ' />'
                     s.append('<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt))
             s.append('</g>\n')
-        time2_ts = time.thread_time_ns()*0.000001
+        time3_ts = time.thread_time_ns()*0.000001
         # bodies
         dots = []
         for body in (self.bodies+self.earthsatellites):
@@ -356,7 +395,14 @@ class SkymapBinder:
                 x,y = self.to_xy(alt.degrees,az.radians)
                 dir = int(round(az.degrees/22.5,0))
                 if dir==16: dir = 0
-                txt = '%s\nh=%.1f&deg; a=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (label,alt.degrees,az.degrees,ordinates[dir],ra.hours,dec.degrees)
+                # horizontal coordinate system: altitude, azimuth
+                # rotierendes äquatoriales Koordinatensystem: ra dec
+                # ortsfestes äquatoriales Koordindatensystem: ha dec
+                txt = '%s\n%s=%.1f&deg; %s=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (
+                    label,
+                    self.get_text('Altitude'),alt.degrees,
+                    self.get_text('Azimuth'),az.degrees,ordinates[dir],
+                    ra.hours,dec.degrees)
                 phase = None
                 if body=='sun':
                     # sun
@@ -405,9 +451,19 @@ class SkymapBinder:
                 if not unit: unit = " km"
                 txt += '\n{:}: {:_.0f}{:}'.format(self.get_text('Distance').capitalize(),distance.km,unit).replace('_','&#8239;')
                 if magnitude:
-                   txt += '\n%s: %.2f' % (self.get_text('Magnitude'),magnitude)
+                    txt += '\n%s: %.2f' % (self.get_text('Magnitude'),magnitude)
+                if isinstance(body_eph,EarthSatellite):
+                    point = wgs84.geographic_position_of(body_eph.at(time_ti))
+                    txt += '\n{:}: {:.4f}&deg; {:}, {:.4f}&deg; {:}, {:_.0f}{:}'.format(
+                        self.get_text('Position'),
+                        abs(point.latitude.degrees),
+                        ordinates[0 if point.latitude.degrees>=0.0 else 8],
+                        abs(point.longitude.degrees),
+                        ordinates[4 if point.longitude.degrees>=0.0 else 12],
+                        point.elevation.km,
+                        unit).replace('_','&#8239;')
                 dots.append((body,txt,x,y,r,distance,col,radius,phase,short_label,shape))
-        time3_ts = time.thread_time_ns()*0.000001
+        time4_ts = time.thread_time_ns()*0.000001
         dots.sort(key=lambda x:-x[5].km)
         for dot in dots:
             if dot[0]=='moon':
@@ -427,7 +483,7 @@ class SkymapBinder:
                 if dot[9] and len(dot[9])<=2:
                     s.append('<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9]))
                 s.append('</g>\n')
-        time4_ts = time.thread_time_ns()*0.000001
+        time5_ts = time.thread_time_ns()*0.000001
         # end clipping
         s.append('</g>\n')
         # azimuth scale
@@ -492,8 +548,10 @@ class SkymapBinder:
         s.append('<text x="-97" y="97" font-size="3" fill="#808080" text-anchor="start">%s: %s</text>\n' % (self.get_text('Data source'),', '.join(datasource)))
         s.append('<text x="97" y="97" font-size="3" fill="#808080" text-anchor="end">%s</text>\n' % self.credits)
         s.append(SkymapAlmanacType.SVG_END)
-        time5_ts = time.thread_time_ns()*0.000001
-        logdbg("skymap %s %s %s %s %s" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts,time5_ts-time4_ts))
+        time6_ts = time.thread_time_ns()*0.000001
+        log_end_ts = time.time()
+        logdbg("skymap elapsed CPU time %.0fµs %.0fµs %.0fµs %.0fµs %.0fµs %.0fµs" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts,time5_ts-time4_ts,time6_ts-time5_ts))
+        logdbg("skymap elapsed time %.2f seconds" % (log_end_ts-log_start_ts))
         return ''.join(s)
 
 
@@ -636,7 +694,8 @@ class SkymapService(StdService):
                     'Sidereal time':'Sidereal time',
                     'Distance':'Distance',
                     'Data source':'Data source',
-                    'Magnitude':'Magnitude'
+                    'Magnitude':'Magnitude',
+                    'First point of Aries':'First point of Aries'
                 })
             if lang=='de' or lang.startswith('de_'):
                 conf.update({
@@ -645,6 +704,7 @@ class SkymapService(StdService):
                     'Distance':'Entfernung',
                     'Data source':'Datenquelle',
                     'Magnitude':'Magnitude',
+                    'First point of Aries':'Frühlingspunkt',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
