@@ -40,11 +40,6 @@ from skyfield.positionlib import position_of_radec
 import skyfield.almanac
 import skyfield.units
 
-try:
-    _moon_radius_m = skyfield.almanac._moon_radius_m
-except AttributeError:
-    _moon_radius_m = 1.7374e6
-
 # Logging
 import weeutil.logger
 import logging
@@ -178,41 +173,53 @@ class SkymapBinder:
                 alt(float): altitude in degrees
                 az(float): azimuth in radians
             
-            Returns
-                tuple: svg coordinates
+            Returns:
+                tuple: SVG coordinates
+            
+            self.inout(float): Is the point of view inside or outside the
+                celestial globe?
         """
         alt = 90-alt
         return self.inout*alt*numpy.sin(az),-alt*numpy.cos(az)
     
     @staticmethod
     def magnitude_to_r(magnitude):
+        """ get radius to draw out of magnitude """
         r = (6.0-magnitude)*0.1
         if r<0.1: r = 0.1
         return r
     
     @staticmethod
     def four_pointed_star(x,y,r,color):
+        """ draw four pointed star """
         return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
 
-    def circle_of_right_ascension(self, observer, almanac_obj, time_ti):
+    def circle_of_right_ascension(self, observer, almanac_obj, time_ti, color='#808080'):
         """ draw circle of that declination that touches the horizon 
         
             It is not really a circle, not even an ellipse. But it is near.
             The hours are the current right ascension. Stars move very
             very slowly only in respect of right ascension and declination.
         """
-        s = ['<g id="circle_of_right_ascension" fill="%s">\n' % '#808080']
+        s = ['<g id="circle_of_right_ascension" fill="%s">\n' % color]
+        # hours of right ascension (one star day)
         hours = numpy.arange(24)
+        # set declination according to the latitude the map is drawn for
         dec = numpy.array([(90-abs(almanac_obj.lat))*(1 if almanac_obj.lat>=0 else -1)]*24)
+        # Below 20° of latitude the circle is too small for text marks
         above20 = abs(almanac_obj.lat)>20
+        # create fictive stars holding the positions according to the 
+        # coordinates defined before
         body = Star(ra_hours=hours,dec_degrees=dec,epoch=time_ti)
+        # get the current altitudes and azimuths for those positions
         apparent = observer.at(time_ti).observe(body).apparent()
         alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        # draw the circle
         for alt, az, hour in zip(alts.degrees,azs.radians,hours):
             x,y = self.to_xy(alt,az)
             #dir = numpy.arctan2(x,y+90-almanac_obj.lat)
             #r = 1 if hour!=0 else 2
-            #s += SkymapBinder.four_pointed_star(x,y,r,'#808080')
+            #s += SkymapBinder.four_pointed_star(x,y,r,color)
             #s += '<path fill="none" stroke="#808080" stroke-width="0.2" d="M%.4f,%.4fl%.4f,%.4fM%.4f,%.4fl%.4f,%.4f" />\n' % ()
             if above20:
                 s.append('<text x="%.4f" y="%.4f" font-size="3" text-anchor="middle" dominant-baseline="middle">%dh</text>\n' % (x,y,hour))
@@ -221,38 +228,54 @@ class SkymapBinder:
         s.append('</g>\n')
         return ''.join(s)
     
-    def circle_of_ecliptic(self, observer, almanac_obj, time_ti):
+    def circle_of_ecliptic(self, observer, almanac_obj, time_ti, color='#C000C0'):
         """ draw circle of ecliptic 
         
             This draws a dotted line with each dot 1 day apart from the other
             one.
         """
         time0_ts = time.thread_time_ns()*0.000001
-        s =['<g id="circle_of_ecliptic" fill="%s" stroke="none">\n' % '#800080']
-        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i-182 for i in range(364)])
+        s =['<g id="circle_of_ecliptic" fill="%s" stroke="none">\n' % color]
+        # list of the days of a year, starting 1/2 year before the current day
+        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i-182 for i in range(365)])
+        # calculating right ascension and declination of the sun for all those
+        # dates.
         ra, dec, _ = observer.at(days).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().radec('date')
         time1_ts = time.thread_time_ns()*0.000001
+        # create fictive stars holding those positions in sky
         dots = Star(ra_hours=ra.hours,dec_degrees=dec.degrees,epoch=time_ti)
+        # calculate the positions of those objects for the current date and time
         apparent = observer.at(time_ti).observe(dots).apparent()
         time2_ts = time.thread_time_ns()*0.000001
+        # calculate altitude and azimuth for those positions
         alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
         time3_ts = time.thread_time_ns()*0.000001
+        # draw dots of the circle of the ecliptic
         for alt, az, day in zip(alts.degrees,azs.radians,days):
             if alt>=0:
                 x,y = self.to_xy(alt,az)
                 s.append('<circle cx="%.4f" cy="%.4f" r="%s" />\n' % (x,y,0.2))
         time4_ts = time.thread_time_ns()*0.000001
-        # first point of Aries (spring equinox)
+        # mark first point of Aries (March equinox, in northern hemisphere
+        # spring equinox)
+        # Note: The first point of Aries is the origin of right ascension.
+        #       That is the reason this equinox is marked and the other one
+        #       is not. 
+        #       The difference between the words "first point of Aries" and
+        #       "equinox" is that the former refers to the position on the
+        #       celestial globe and the latter to the date and time of the
+        #       event.
         dot = Star(ra_hours=0,dec_degrees=0,epoch=time_ti)
         apparent = observer.at(time_ti).observe(dot).apparent()
         alt, az, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
         x,y = self.to_xy(alt.degrees,az.radians)
         s.append('<circle cx="%.4f" cy="%.4f" r="%s"><title>%s</title></circle>\n' % (x,y,0.5,self.get_text('First point of Aries')))
-        logdbg("ecliptic elapsed CPU time %.3fµs %.3fµs %.3fµs %.3fµs" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
+        logdbg("ecliptic elapsed CPU time %.3fms %.3fms %.3fms %.3fms" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
         s.append('</g>\n')
         return ''.join(s)
 
     def get_text(self, text):
+        """ get localized text """
         return self.labels.get(text,text)
 
     def skymap(self, almanac_obj):
@@ -405,12 +428,13 @@ class SkymapBinder:
                     ra.hours,dec.degrees)
                 phase = None
                 if body=='sun':
-                    # sun
-                    radius = 16.0/60.0
+                    # sun (radius about 16/60°)
+                    radius = user.skyfieldalmanac.SUN_RADIUS_KM/distance.km*RAD2DEG
                     r = 4
                 elif body=='moon':
                     # earth moon
-                    radius = _moon_radius_m/distance.m*RAD2DEG
+                    #radius = _moon_radius_m/distance.m*RAD2DEG
+                    radius = user.skyfieldalmanac.MEAN_MOON_RADIUS_KM/distance.km*RAD2DEG
                     r = 2
                     phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.sun_and_planets,time_ti)
                     moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
@@ -418,7 +442,7 @@ class SkymapBinder:
                     txt += '\n%s: %.0f&deg; %s' % (self.get_text('Phase').capitalize(),phase.degrees,ptext)
                 elif body in user.skyfieldalmanac.planets_list and magnitude is not None:
                     # planets other than earth
-                    radius = None
+                    radius = user.skyfieldalmanac.SIZES[body.split('_')[0]][0]/distance.km*RAD2DEG
                     r = SkymapBinder.magnitude_to_r(magnitude)
                     """
                     r = (6.0-magnitude)*0.1
@@ -445,6 +469,12 @@ class SkymapBinder:
                         shape = format[2]
                 else:
                     short_label = None
+                if radius:
+                    dm, ds = divmod(radius*2.0*3600,60)
+                    if dm>0:
+                        txt += '\n%s: %.0f&prime;%.1f&Prime;' % (self.get_text('Apparent size'),dm,ds)
+                    else:
+                        txt += '\n%s: %.1f&Prime;' % (self.get_text('Apparent size'),ds)
                 # According to ISO 31 the thousand separator is a thin space
                 # independent of language.
                 unit = almanac_obj.formatter.get_label_string("km")
@@ -550,7 +580,7 @@ class SkymapBinder:
         s.append(SkymapAlmanacType.SVG_END)
         time6_ts = time.thread_time_ns()*0.000001
         log_end_ts = time.time()
-        logdbg("skymap elapsed CPU time %.0fµs %.0fµs %.0fµs %.0fµs %.0fµs %.0fµs" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts,time5_ts-time4_ts,time6_ts-time5_ts))
+        logdbg("skymap elapsed CPU time %.0fms %.0fms %.0fms %.0fms %.0fms %.0fms" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts,time5_ts-time4_ts,time6_ts-time5_ts))
         logdbg("skymap elapsed time %.2f seconds" % (log_end_ts-log_start_ts))
         return ''.join(s)
 
@@ -695,7 +725,8 @@ class SkymapService(StdService):
                     'Distance':'Distance',
                     'Data source':'Data source',
                     'Magnitude':'Magnitude',
-                    'First point of Aries':'First point of Aries'
+                    'First point of Aries':'First point of Aries',
+                    'Apparent size':'Apparent size'
                 })
             if lang=='de' or lang.startswith('de_'):
                 conf.update({
@@ -705,6 +736,7 @@ class SkymapService(StdService):
                     'Data source':'Datenquelle',
                     'Magnitude':'Magnitude',
                     'First point of Aries':'Frühlingspunkt',
+                    'Apparent size':'Scheinbare Größe',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',

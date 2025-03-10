@@ -3,6 +3,17 @@ Sky map for WeeWX
 
 ![sky map](skymap.png)
 
+## Contents
+
+* [Prerequisites](#prerequisites)
+* [Installation instructions](#installation-instructions)
+* [Configuration instructions](#configuration-instructions)
+* [Usage](#usage)
+  * [Sky map](#sky-map)
+  * [Moon with moon phase](#moon-with-moon-phase)
+* [Time](#time)
+* [Links](#links)
+
 ## Prerequisites
 
 WeeWX from version 5.2 on and weewx-skyfield-almanac
