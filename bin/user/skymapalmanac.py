@@ -369,15 +369,17 @@ class SkymapBinder:
             # calculate all the positions in the sky
             apparent = observer.at(time_ti).observe(selected_stars).apparent()
             alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-            for alt, az, distance, mag, hip in zip(alts.degrees,azs.radians,distances.km,df['magnitude'],df.index):
+            for alt, az, distance, mag, hip in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index):
                 if alt>=0:
                     x,y = self.to_xy(alt,az)
-                    if varsize: r = 0.7/mag if mag>0.7 else 0.7
                     if varsize: r = SkymapBinder.magnitude_to_r(mag)
                     if mag<=self.star_tooltip_max_magnitude:
                         txt = user.skyfieldalmanac.hip_to_starname(hip,'')
                         if txt: txt += '\n'
-                        txt = '><title>%sHIP%s\n%s: %.2f</title></circle>' % (txt,hip,self.get_text('Magnitude'),mag)
+                        txt += 'HIP%s\n' % hip
+                        if distance:
+                            txt += '%s: %.0f %s\n' % (self.get_text('Distance'),distance,'Lj')
+                        txt = '><title>%s%s: %.2f</title></circle>' % (txt,self.get_text('Magnitude'),mag)
                     else:
                         txt = ' />'
                     s.append('<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt))
@@ -743,6 +745,34 @@ class SkymapService(StdService):
                     'neptune':'Neptun',
                     'neptune_barycenter':'Neptun',
                 })
+            if lang in ('cz','cs') or lang.startswith('cz_') or lang.startswith('cs_'):
+                conf.update({
+                    'Solar time':'Sluneční čas',
+                    'Sidereal time':'Hvězdný čas',
+                    'Distance':'Vzdálenost',
+                    'Magnitude':'Hvězdná velikost',
+                    'First point of Aries':'Jarní bod',
+                    # planet names that are different from English
+                    'mercury':'Merkur',
+                    'venus':'Venuše',
+                    'earth':'Země',
+                    'uranus':'Uran',
+                    'uranus_barycenter':'Uran',
+                    'neptune':'Neptun',
+                    'neptune_barycenter':'Neptun'
+                })
+            if lang=='nl' or lang.startswith('nl_'):
+                conf.update({
+                    'Solar time':'Zonnetijd',
+                    'Sidereal time':'Sterrentijd',
+                    # planet names that are different from English
+                    'mercury':'Mercurius',
+                    'earth':'de Aarde',
+                    'saturn':'Saturnus',
+                    'saturn_barycenter':'Saturnus',
+                    'neptune':'Neptunus',
+                    'neptune_barycenter':'Neptunus'
+                })
             skin = os.path.join(skin_root,'Seasons','lang')
             try:
                 data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang))
@@ -761,15 +791,15 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in ('Altitude','Magnitude','Solar time','Sidereal time'):
+                    for key in ('Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size'):
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets
                     # Note: We need the planets' names in lowercase.
-                    for key in ('Mercury','Earth','Mars','Venus','Jupiter','Saturn','Neptune','Pluto','Ceres'):
-                        if key in astro:
-                            conf[key.lower()] = astro[key]
-                            conf[key.lower()+'_barycenter'] = astro[key]
+                    for key in list(user.skyfieldalmanac.PLANETS)+['ceres']:
+                        if key.capitalize() in astro:
+                            conf[key] = astro[key.capitalize()]
+                            conf[key+'_barycenter'] = astro[key.capitalize()]
             except (OSError,ValueError) as e:
                 logerr("languge '%s'; %s - %s" % (lang,e.__class__.__name__,e))
             logdbg('%s: %s' % (lang,conf))
