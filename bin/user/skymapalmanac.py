@@ -92,6 +92,8 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             return SkymapBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='moon_symbol':
             return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), ['rgba(255,243,228,0.5)','#ffecd5'])
+        if attr=='analemma':
+            return AnalemmaBinder(self.station_location, almanac_obj, self.get_labels(almanac_obj), None)
 
         raise weewx.UnknownType(attr)
 
@@ -126,7 +128,7 @@ class SkymapBinder:
         self.inout = -1.0
         self.width = 800
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
-        self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.1))
+        self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -141,13 +143,13 @@ class SkymapBinder:
         for key in kwargs:
             if key=='width':
                 self.width = weeutil.weeutil.to_int(kwargs[key])
-            elif key in ('show_stars','show_timestamp','show_location','show_ecliptic'):
+            elif key in {'show_stars','show_timestamp','show_location','show_ecliptic'}:
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
             elif key=='fromoutside':
                 self.inout = 1.0 if kwargs[key] else -1.0
             elif key=='bodies':
                 self.bodies = list(kwargs[key])
-            elif key in ('max_magnitude','star_tooltip_max_magnitude'):
+            elif key in {'max_magnitude','star_tooltip_max_magnitude'}:
                 setattr(self,key,weeutil.weeutil.to_float(kwargs[key]))
             else:
                 setattr(self,key,kwargs[key])
@@ -454,7 +456,7 @@ class SkymapBinder:
                     # other heavenly objects including Pluto
                     radius = None
                     r = 0.2
-                if body in ('mars','mars_barycenter'):
+                if body in {'mars','mars_barycenter'}:
                     col = '#ff8f5e'
                 elif body=='moon':
                     #col = ['rgba(255,243,228,0.3)','#ffecd5']
@@ -620,6 +622,181 @@ class MoonSymbolBinder:
         return s
 
 
+class AnalemmaBinder:
+    """ SVG image of analemma """
+    
+    SVG_START = '''<svg
+  width="%s" height="%s" 
+  viewBox="%s %s %s %s"
+  xmlns="http://www.w3.org/2000/svg">
+'''
+    SVG_END = '</svg>\n'
+    
+    def __init__(self, station_location, almanac_obj, labels, colors):
+        self.credits = '&copy; ' + station_location
+        self.almanac_obj = almanac_obj
+        self.labels = labels
+        self.colors = colors
+        self.width = 280
+        self.height = 300
+        self.tz = "LMT"
+
+    def __call__(self, width=None, height=None, tz=None):
+        if width:
+            self.width = weeutil.weeutil.to_int(width)
+        if height:
+            self.height = weeutil.weeutil.to_int(height)
+        if tz:
+            self.tz = str(tz)
+        return self
+
+    def __str__(self):
+        try:
+            return self.analemma()
+        except Exception as e:
+            logerr("analemma %s %s" % (e.__class__.__name__,e))
+            return ""
+    
+    def analemma(self):
+        """ create an SVG image of an analemma """
+        # diagram area
+        fontsize = self.height/25
+        x0 = int(fontsize*3)
+        y0 = int(self.height-fontsize*2.7)
+        width = int(self.width-x0-fontsize)
+        height = int(self.height-fontsize*(2.7+3.3))
+        # midnight at the beginning of the year
+        year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
+        # time of day
+        hms = (self.almanac_obj.time_ts-year[0])%86400
+        # convert to Skyfield time
+        time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0]+hms)
+        t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
+        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1])
+        loginf("analemma year=(%s,%s) ti=%s" % (t0,t1,time_ti))
+        # list of the days of a year
+        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(365)])
+        # location
+        observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
+        # Sun's positions
+        alts, azs, _ = observer.at(days).observe(body).apparent().altaz()
+        # Min and max
+        min_alt = numpy.floor(numpy.min(alts.degrees)-3)
+        max_alt = numpy.ceil(numpy.max(alts.degrees)+3)
+        min_az = numpy.floor(numpy.min(azs.degrees)-1)
+        max_az = numpy.ceil(numpy.max(azs.degrees)+1)
+        # Scale
+        if abs(max_alt-min_alt)>=40:
+            yscale = 10
+        else:
+            yscale = 5
+        min_alt = numpy.floor(min_alt/yscale)*yscale
+        max_alt = numpy.ceil(max_alt/yscale)*yscale
+        xscale = abs(max_az-min_az)/width*fontsize*4
+        if xscale<1.5:
+            xscale = 1
+        elif xscale<2.5:
+            xscale = 2
+        elif xscale<6:
+            xscale = 5
+        elif xscale<12:
+            xscale = 10
+        min_az = numpy.floor(min_az/xscale)*xscale
+        max_az = numpy.ceil(max_az/xscale)*xscale
+        loginf("analemma min_alt=%s max_alt=%s min_az=%s max_az=%s" % (min_alt,max_alt,min_az,max_az))
+        # Seasons
+        t_season, k_season = skyfield.almanac.find_discrete(t0,t1,skyfield.almanac.seasons(user.skyfieldalmanac.sun_and_planets))
+        t = user.skyfieldalmanac.ts.ut1_jd(numpy.round(t_season.ut1-time_ti.ut1,0)+time_ti.ut1)
+        alt_season, az_season, _ = observer.at(t).observe(body).apparent().altaz()
+        loginf("analemma seasons %s" % t_season)
+        loginf("analemma seasons alt %s" % alt_season)
+        loginf("analemma seasons az %s" % az_season)
+        # convert positions to SVG coordinates
+        x_factor = width/(max_az-min_az)
+        y_factor = height/(min_alt-max_alt)
+        ys = (alts.degrees-min_alt)*y_factor+y0
+        xs = (azs.degrees-min_az)*x_factor+x0
+        y_season = (alt_season.degrees-min_alt)*y_factor+y0
+        x_season = (az_season.degrees-min_az)*x_factor+x0
+        s = []
+        s.append(AnalemmaBinder.SVG_START % (self.width,self.height,0,0,self.width,self.height))
+        s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="currentColor" stroke-width="1" fill="none" />\n' % (x0,y0-height,width,height))
+        # y scale
+        for i in range(int(min_alt),int(max_alt)+yscale,yscale):
+            y = (i-min_alt)*y_factor+y0
+            if i!=int(min_alt) and i!=int(max_alt):
+                s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="#808080" />\n' % (x0,y,x0+width,y))
+            s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&deg;</text>\n' % (x0-3,y,fontsize,i))
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
+            x0-2.3*fontsize,y0-0.5*height,fontsize,x0-2.3*fontsize,y0-0.5*height,self.labels.get('Altitude','Altitude')))
+        # x scale
+        for i in range(int(min_az),int(max_az)+xscale,xscale):
+            x = (i-min_az)*x_factor+x0
+            s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="#808080" />\n' % (x,y0,x,y0-height))
+            s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&deg;</text>\n' % (
+                x,y0+fontsize*1.1,fontsize,i))
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+            x0+0.5*width,y0+fontsize*2.2,fontsize,self.labels.get('Azimuth','Azimuth')))
+        # analemma
+        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % ('#7cb5ec',xs[0],ys[1]))
+        for x,y in zip(xs,ys):
+            s.append('L%.2f,%.2f' % (x,y))
+        s.append('z" />\n')
+        # seasons
+        r = fontsize/3
+        for x,y,t,w in zip(x_season,y_season,user.skyfieldalmanac.skyfield_time_to_djd(t_season),k_season):
+            time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
+            time_s = str(time_vt).split(' ')[0]
+            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,'#f7a35c'))
+            if w==0:
+                anchor = "end"
+                xoffset = -2*r
+                yoffset = 0
+            elif w==2:
+                anchor = "start"
+                xoffset = 2*r
+                yoffset = 0
+            else:
+                c = (x-x0)/width
+                if c<0.33333333:
+                    anchor = "start"
+                    xoffset = -r
+                elif c<0.66666666:
+                    anchor = "middle"
+                    xoffset = 0
+                else:
+                    anchor = "end"
+                    xoffset = r
+                if w==1:
+                    yoffset = -0.8*fontsize
+                else:
+                    yoffset = fontsize
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
+                x+xoffset,y+yoffset,'#f7a35c',fontsize*1.1,anchor,time_s))
+        # caption
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle">%s</text>\n' % (0.5*self.width,fontsize*1.5,fontsize*1.5,"Analemma"))
+        # timestamp
+        if self.tz.upper() in {'LMT','UTC'}:
+            # Local Mean Time or UTC
+            format = self.almanac_obj.formatter.time_format_dict.get('ephem_day','%H:%M:%S').replace('%a','').strip()
+            if self.tz.upper=='LMT':
+                localtime = self.almanac_obj.time_ts+self.almanac_obj.lon*240
+                tz = self.labels.get("local mean time","mittlere Ortszeit")
+            else:
+                localtime = self.almanac_obj.time_ts
+                tz = "UTC"
+            time_vt = "%s %s" % (
+                time.strftime(format,time.gmtime(localtime)),
+                tz
+            )
+        else:
+            # Civil time according to the actual time zone
+            time_vt = ValueHelper(ValueTuple(self.almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_day',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle">%s</text>\n' % (0.5*self.width,fontsize*2.7,fontsize*1.1,time_vt))
+        s.append(AnalemmaBinder.SVG_END)
+        return "".join(s)
+
+
 def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
     """ create SVG image of the moon showing her phase """
     phase = round(phase.degrees,1)%360
@@ -745,7 +922,7 @@ class SkymapService(StdService):
                     'neptune':'Neptun',
                     'neptune_barycenter':'Neptun',
                 })
-            if lang in ('cz','cs') or lang.startswith('cz_') or lang.startswith('cs_'):
+            if lang in {'cz','cs'} or lang.startswith('cz_') or lang.startswith('cs_'):
                 conf.update({
                     'Solar time':'Sluneční čas',
                     'Sidereal time':'Hvězdný čas',
@@ -782,16 +959,16 @@ class SkymapService(StdService):
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
                     # get language dependend texts used in astronomy
                     x = data.get('Texts',dict())
-                    for key in ('Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time'):
+                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time'}:
                         if key in x:
                             conf[key] = x[key]
-                    for key in ('Sun','Moon'):
+                    for key in {'Sun','Moon'}:
                         if key in x:
                             conf[key.lower()] = x[key]
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in ('Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size'):
+                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets

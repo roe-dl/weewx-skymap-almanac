@@ -102,7 +102,7 @@ available if you have special requirements.
   looks more the way you know the sky in the night to be.
   Please note, the larger the magnitude, the fainter the star.
 * `star_tooltip_max_magnitude`: Stars get a tooltip if their magnitude
-  is less than this value. Optional. Default is 2.1. 
+  is less than this value. Optional. Default is 2.5. 
 * `show_stars`: Flag whether to include stars in the map. Optional.
   Default `True`.
 * `show_timestamp`: Flag whether to include the timestamp. Optional.
@@ -144,6 +144,20 @@ Add `$almanac.moon_symbol` to your skin.
 You can change the size of the symbol by setting the parameter `width` like
 `$almanac.moon_symbol(width=200)`.
 
+### Analemma
+
+Add `$almanac.analemma` to your skin.
+
+You can change the size of the diagram by setting the parameters `width` and
+`height`.
+
+The analemma is calculated for the year and the time of day `$almanac` is 
+bound to. You can change it by setting `almanac_time`.
+
+You can specify which time is used within the caption by setting `tz` to
+`LMT` for Local Mean Time, `UTC` for UTC, or `civil` for civil time
+according to your time zone.
+
 ## Time
 
 The sky map image contains different timestamps:
@@ -155,6 +169,14 @@ The sky map image contains different timestamps:
   sidereal time. 
 * **Civil time**: Civil time you find in the lower right corner together
   with the date.
+
+You can choose which time is used within the caption of the analemma:
+
+* **LMT**: Local Mean Time. 
+  This differs from solar time by the equation of time.
+  Often an analemma is provided for 12:00:00 Local Mean Time.
+* **UTC**: World time.
+* **civil**: The local timezone time.
 
 ## Links
 
