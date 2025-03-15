@@ -189,7 +189,7 @@ class SkymapBinder:
     def magnitude_to_r(magnitude):
         """ get radius to draw out of magnitude """
         r = (6.0-magnitude)*0.1
-        if r<0.1: r = 0.1
+        if r<0.01: r = 0.01
         return r
     
     @staticmethod
@@ -306,6 +306,7 @@ class SkymapBinder:
                'E' if self.almanac_obj.lon>=0 else 'W',
                 time.strftime("%Y-%m-%dT%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
             ),
+            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
             '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
         ]
         # background
@@ -407,15 +408,15 @@ class SkymapBinder:
                 label = '%s (#%s)' % (self.labels.get(body,body_eph.name),body_eph.model.satnum)
                 short_label = body_eph.name
                 if body_eph.name.startswith('GPS ') and '(PRN' in body_eph.name:
-                    i = body_eph.name.index('(PRN')
+                    i = body_eph.name.find('(PRN')
                     if i>=0:
                         short_label = body_eph.name[i+4:].split(')')[0].strip()
                 elif '(GALILEO' in body_eph.name:
-                    i = body_eph.name.index('(GALILEO')
+                    i = body_eph.name.find('(GALILEO')
                     if body_eph.name[i+8]=='-': i += 1
                     short_label = body_eph.name[i+8:].split(')')[0].strip()
                 elif body_eph.name.startswith('METEOSAT-'):
-                    i = body_eph.name.index('(MSG-')
+                    i = body_eph.name.find('(MSG-')
                     short_label = body_eph.name[i+5:].split(')')[0].strip()
                 magnitude = None
             else:
@@ -573,7 +574,10 @@ class SkymapBinder:
             s.append('<text x="-97" y="-87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % sd)
             # civil time
             time_vt = ValueHelper(ValueTuple(almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_year',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
-            time_s = str(time_vt).split(' ')
+            if '%x' in almanac_obj.formatter.time_format_dict.get('ephem_year'):
+                time_s = (time_vt.format('%x'),time_vt.format('%X'))
+            else:
+                time_s = str(time_vt).split(' ')
             s.append('<text x="97" dy="87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[0])
             if len(time_s)>1 and time_s[1]:
                 s.append('<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1])
@@ -634,8 +638,10 @@ class MoonSymbolBinder:
         ptext = self.almanac_obj.moon_phases[moon_index]
         txt = self.labels.get('moon','moon').capitalize()
         txt += '\n%s: %.0f&deg; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
-        return '%s%s%s' % (
+        return '%s%s%s%s%s' % (
             SkymapAlmanacType.SVG_START % (self.width,self.width),
+            '<desc>the Moon, phase %.1f&deg;</desc>\n' % phase.degrees,
+            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
             moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',None),
             SkymapAlmanacType.SVG_END
         )
@@ -707,8 +713,8 @@ class AnalemmaBinder:
         # Min and max
         min_alt = numpy.floor(numpy.min(alts.degrees)-3)
         max_alt = numpy.ceil(numpy.max(alts.degrees)+3)
-        min_az = numpy.floor(numpy.min(azs.degrees)-1.5)
-        max_az = numpy.ceil(numpy.max(azs.degrees)+1.5)
+        min_az = numpy.floor(numpy.min(azs.degrees)-1)
+        max_az = numpy.ceil(numpy.max(azs.degrees)+1)
         # Scale
         if abs(max_alt-min_alt)>=40:
             yscale = 10
@@ -754,6 +760,7 @@ class AnalemmaBinder:
             time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
             time.strftime("%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
         ))
+        s.append('<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n')
         s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
             x0,y0-height,width,height,self.colors[0]))
         # y scale
@@ -778,10 +785,27 @@ class AnalemmaBinder:
             s.append('L%.2f,%.2f' % (x,y))
         s.append('z" />\n')
         # seasons
+        format = self.almanac_obj.formatter.time_format_dict.get('ephem_year','%d.%m.')
+        if '%x' in format:
+            format = '%x'
+        else:
+            i,j = format.find("%H"),format.find("%S")
+            if i>0 and format[i-1]=='T': i -= 1
+            if i>=0 and j>i: format = (format[0:i].strip()+" "+format[j+2:].strip()).strip()
+            if '%Y-' in format:
+                format = format.replace('%Y-','')
+            elif '%Y' in format:
+                format = format.replace('%Y','').strip()
         r = fontsize/3
         for x,y,t,w in zip(x_season,y_season,user.skyfieldalmanac.skyfield_time_to_djd(t_season),k_season):
             time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
-            time_s = str(time_vt).split(' ')[0]
+            time_s = time_vt.format(format)
+            year = time_vt.format("%Y")
+            if format=='%x':
+                if ('%s-' % year) in time_s:
+                    time_s = time_s.replace('%s-' % year,'')
+                elif year in time_s:
+                    time_s = time_s.replace(year,'').strip()
             s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,self.colors[3]))
             if w==0:
                 anchor = "end"
@@ -804,6 +828,14 @@ class AnalemmaBinder:
                     xoffset = r
                 if w==1:
                     yoffset = -0.8*fontsize
+                    s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s">%s</text>\n' % (
+                        x0+0.4*fontsize if c>0.5 else x0+width-0.4*fontsize,
+                        y0-height+1.4*fontsize,
+                        self.colors[3],
+                        fontsize*1.1,
+                        "start" if c>0.5 else "end",
+                        year
+                    ))
                 else:
                     yoffset = fontsize
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
