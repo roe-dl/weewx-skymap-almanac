@@ -578,8 +578,8 @@ class SkymapBinder:
             if len(time_s)>1 and time_s[1]:
                 s.append('<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1])
         if self.show_location:
-            lat_vt = ValueHelper(ValueTuple(almanac_obj.lat,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
-            lon_vt = ValueHelper(ValueTuple(almanac_obj.lon,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
+            lat_vt = ValueHelper(ValueTuple(abs(almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
+            lon_vt = ValueHelper(ValueTuple(abs(almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lat_s = lat_vt.format("%8.4f")
             lon_s = lon_vt.format("%08.4f")
             if self.location:
@@ -707,8 +707,8 @@ class AnalemmaBinder:
         # Min and max
         min_alt = numpy.floor(numpy.min(alts.degrees)-3)
         max_alt = numpy.ceil(numpy.max(alts.degrees)+3)
-        min_az = numpy.floor(numpy.min(azs.degrees)-1)
-        max_az = numpy.ceil(numpy.max(azs.degrees)+1)
+        min_az = numpy.floor(numpy.min(azs.degrees)-1.5)
+        max_az = numpy.ceil(numpy.max(azs.degrees)+1.5)
         # Scale
         if abs(max_alt-min_alt)>=40:
             yscale = 10
@@ -840,8 +840,8 @@ class AnalemmaBinder:
             else:
                 # location described by geographic coordinates
         # location
-                lat_vt = ValueHelper(ValueTuple(self.almanac_obj.lat,'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
-                lon_vt = ValueHelper(ValueTuple(self.almanac_obj.lon,'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
+                lat_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
+                lon_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lat_s = lat_vt.format("%.4f").replace(' ','&numsp;')
                 lon_s = lon_vt.format("%08.4f")
                 txt = "%s, %s&thinsp;%s, %s&thinsp;%s" % (

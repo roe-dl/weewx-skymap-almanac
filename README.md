@@ -199,6 +199,11 @@ defined to adjust the layout:
   * `UTC`: UTC
   * `civil`: The local time as used by WeeWX. This is the default.
 
+This is the analemma at the Royal Observatory Greenwich at high noon mean
+time:
+
+![analemma](analemma.png)
+
 ## Links
 
 * [WeeWX](https://weewx.com)
