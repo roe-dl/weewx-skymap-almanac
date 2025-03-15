@@ -8,10 +8,9 @@ Sky map for WeeWX
 * [Prerequisites](#prerequisites)
 * [Installation instructions](#installation-instructions)
 * [Configuration instructions](#configuration-instructions)
-* [Usage](#usage)
-  * [Sky map](#sky-map)
-  * [Moon with moon phase](#moon-with-moon-phase)
-* [Time](#time)
+* [Sky map](#sky-map)
+* [Moon with moon phase](#moon-with-moon-phase)
+* [Analemma](#analemma)
 * [Links](#links)
 
 ## Prerequisites
@@ -106,11 +105,15 @@ available if you have special requirements.
 * `show_stars`: Flag whether to include stars in the map. Optional.
   Default `True`.
 * `show_timestamp`: Flag whether to include the timestamp. Optional.
-  Default `True`.
+  Default `True`. 
 * `show_location`: Flag whether to include the location. Optional.
   Default `True`.
 * `show_ecliptic`: Flag whether to show the ecliptic as a dotted line.
   Optional. Default `True`.
+* `moon_colors`: Colors for `moon_symbol`. Optional. Default
+  `['rgba(255,243,228,0.5)','#ffecd5']`
+* `analemma_colors`: Colors for `analemma`. Optional. Default
+  `['currentColor','#808080','#7cb5ec','#f7a35c']`
 * `[[[Formats]]]`: Format options. Optional.
   There are reasonable defaults. So you do not need this section at all.
   But if you want to set up something special you can do it here.
@@ -124,9 +127,12 @@ available if you have special requirements.
   shape of the representation of the object. For example it can be
   `round`, `triangle`, `square`, or `rhombus`.
 
-## Usage
+All the configuration options can also be used as parameters to the
+attributes described below.
 
-### Sky map
+## Sky map
+
+### Usage
 
 Add `$almanac.skymap` to your skin.
 
@@ -134,31 +140,22 @@ The map shows the sky as you would see it if you were lying on the ground,
 your legs to the south, and looking upwards. The size of the heavenly bodies 
 on the map is not according to scale.
 
+### Parameters
+
 You can change the size of the map or other properties by setting parameters
-like `$almanac.skymap(width=1200)`.
+like `$almanac.skymap(width=1200)`. All the options that are defined for the 
+configuration file can also be used as parameters. Additionally there are the 
+following parameters defined to adjust the layout:
 
-### Moon with moon phase
+* `width`: Width and height of the map. Default 800.
+* `location`: Location as text (for example the city name). Appears in the
+  lower left corner of the sky map if provided instead of pure geographic
+  coordinates. An empty string switches it off.
+* `credits`: Credits text in the lower right corner of the sky map. Default
+  is the text of the option `location` in `weewx.conf` together with the
+  copyright sign.
 
-Add `$almanac.moon_symbol` to your skin.
-
-You can change the size of the symbol by setting the parameter `width` like
-`$almanac.moon_symbol(width=200)`.
-
-### Analemma
-
-Add `$almanac.analemma` to your skin.
-
-You can change the size of the diagram by setting the parameters `width` and
-`height`.
-
-The analemma is calculated for the year and the time of day `$almanac` is 
-bound to. You can change it by setting `almanac_time`.
-
-You can specify which time is used within the caption by setting `tz` to
-`LMT` for Local Mean Time, `UTC` for UTC, or `civil` for civil time
-according to your time zone.
-
-## Time
+### Time
 
 The sky map image contains different timestamps:
 
@@ -170,13 +167,37 @@ The sky map image contains different timestamps:
 * **Civil time**: Civil time you find in the lower right corner together
   with the date.
 
-You can choose which time is used within the caption of the analemma:
+## Moon with moon phase
 
-* **LMT**: Local Mean Time. 
-  This differs from solar time by the equation of time.
-  Often an analemma is provided for 12:00:00 Local Mean Time.
-* **UTC**: World time.
-* **civil**: The local timezone time.
+Add `$almanac.moon_symbol` to your skin.
+
+You can change the size of the symbol by setting the parameter `width` like
+`$almanac.moon_symbol(width=200)`.
+
+## Analemma
+
+### Usage
+
+Add `$almanac.analemma` to your skin.
+
+The analemma is calculated for the year and the time of day `$almanac` is 
+bound to. You can change it by setting `almanac_time`.
+
+### Parameters
+
+All the options that are defined for the configuration file can also be
+used as parameters. Additionally there are the following parameters
+defined to adjust the layout:
+
+* `width`: Width of the diagram. Default 280.
+* `height`: Height of the diagram. Default 300.
+* `location`: Location as text (for example the city name). Appears in the 
+  caption of the analemma. An empty string switches it off.
+* `tz`: Time in the caption of the analemma. Possible values are:
+  * `LMT`: Local Mean Time. This differs from solar time by the equation 
+    of time. Often an analemma is provided for 12:00:00 Local Mean Time.
+  * `UTC`: UTC
+  * `civil`: The local time as used by WeeWX. This is the default.
 
 ## Links
 

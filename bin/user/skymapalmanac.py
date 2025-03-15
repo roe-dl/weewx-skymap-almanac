@@ -91,9 +91,9 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         if attr=='skymap':
             return SkymapBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='moon_symbol':
-            return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), ['rgba(255,243,228,0.5)','#ffecd5'])
+            return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['rgba(255,243,228,0.5)','#ffecd5']))
         if attr=='analemma':
-            return AnalemmaBinder(self.station_location, almanac_obj, self.get_labels(almanac_obj), None)
+            return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
         raise weewx.UnknownType(attr)
 
@@ -113,6 +113,7 @@ class SkymapBinder:
     def __init__(self, config_dict, station_location, almanac_obj, labels):
         self.config_dict = config_dict
         self.credits = '&copy; '+station_location
+        self.location = ''
         self.almanac_obj = almanac_obj
         self.labels = labels
         self.log_failure = config_dict['log_failure']
@@ -194,7 +195,8 @@ class SkymapBinder:
     @staticmethod
     def four_pointed_star(x,y,r,color):
         """ draw four pointed star """
-        return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
+        return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (
+            color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
 
     def circle_of_right_ascension(self, observer, almanac_obj, time_ti, color='#808080'):
         """ draw circle of that declination that touches the horizon 
@@ -296,6 +298,14 @@ class SkymapBinder:
         width = self.width if self.width else 800
         s = [
             SkymapAlmanacType.SVG_START % (width,width),
+            # SVG description (always in English, not presented to the user)
+            '<desc>Sky map for %.4f&deg; %s, %08.4f&deg; %s on %s</desc>\n' % (
+                abs(self.almanac_obj.lat),
+                'N' if self.almanac_obj.lat>=0 else 'S',
+                abs(self.almanac_obj.lon),
+               'E' if self.almanac_obj.lon>=0 else 'W',
+                time.strftime("%Y-%m-%dT%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
+            ),
             '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
         ]
         # background
@@ -570,10 +580,20 @@ class SkymapBinder:
         if self.show_location:
             lat_vt = ValueHelper(ValueTuple(almanac_obj.lat,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lon_vt = ValueHelper(ValueTuple(almanac_obj.lon,'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
-            lat_s = lat_vt.format("%8.4f").replace(' ','&numsp;')
+            lat_s = lat_vt.format("%8.4f")
             lon_s = lon_vt.format("%08.4f")
-            s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lat_s,ordinates[0 if almanac_obj.lat>=0 else 8]))
-            s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
+            if self.location:
+                s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.location)
+                s.append('<text x="-97" y="92" font-size="3.5" fill="currentColor" text-anchor="start">%s %s, %s %s</text>\n' % (
+                    lat_s.strip(),ordinates[0 if almanac_obj.lat>=0 else 8],
+                    lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]
+                ))
+            else:
+                s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                    lat_s.replace(' ','&numsp;'),
+                    ordinates[0 if almanac_obj.lat>=0 else 8]))
+                s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
+                    lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
         #s.append(moonphasetest())
         datasource = ['IERS']
         if self.bodies: datasource.append('JPL')
@@ -632,22 +652,26 @@ class AnalemmaBinder:
 '''
     SVG_END = '</svg>\n'
     
-    def __init__(self, station_location, almanac_obj, labels, colors):
+    def __init__(self, config_dict, station_location, almanac_obj, labels):
         self.credits = '&copy; ' + station_location
+        self.location = station_location
         self.almanac_obj = almanac_obj
         self.labels = labels
-        self.colors = colors
+        self.colors = config_dict.get('analemma_colors',['currentColor','#808080','#7cb5ec','#f7a35c'])
         self.width = 280
         self.height = 300
-        self.tz = "LMT"
+        self.tz = "civil"
+        self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
+        self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
 
-    def __call__(self, width=None, height=None, tz=None):
-        if width:
-            self.width = weeutil.weeutil.to_int(width)
-        if height:
-            self.height = weeutil.weeutil.to_int(height)
-        if tz:
-            self.tz = str(tz)
+    def __call__(self, **kwargs):
+        for key in kwargs:
+            if key in {'width','height'}:
+                self.width = weeutil.weeutil.to_int(kwargs[key])
+            elif key in {'show_timestamp','show_location'}:
+                setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
+            else:
+                setattr(self,key,kwargs[key])
         return self
 
     def __str__(self):
@@ -664,7 +688,7 @@ class AnalemmaBinder:
         x0 = int(fontsize*3)
         y0 = int(self.height-fontsize*2.7)
         width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+3.3))
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
         # midnight at the beginning of the year
         year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
         # time of day
@@ -673,7 +697,7 @@ class AnalemmaBinder:
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0]+hms)
         t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
         t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1])
-        loginf("analemma year=(%s,%s) ti=%s" % (t0,t1,time_ti))
+        logdbg("analemma year=(%s,%s) ti=%s" % (t0,t1,time_ti))
         # list of the days of a year
         days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(365)])
         # location
@@ -703,14 +727,14 @@ class AnalemmaBinder:
             xscale = 10
         min_az = numpy.floor(min_az/xscale)*xscale
         max_az = numpy.ceil(max_az/xscale)*xscale
-        loginf("analemma min_alt=%s max_alt=%s min_az=%s max_az=%s" % (min_alt,max_alt,min_az,max_az))
+        logdbg("analemma min_alt=%s max_alt=%s min_az=%s max_az=%s" % (min_alt,max_alt,min_az,max_az))
         # Seasons
         t_season, k_season = skyfield.almanac.find_discrete(t0,t1,skyfield.almanac.seasons(user.skyfieldalmanac.sun_and_planets))
         t = user.skyfieldalmanac.ts.ut1_jd(numpy.round(t_season.ut1-time_ti.ut1,0)+time_ti.ut1)
         alt_season, az_season, _ = observer.at(t).observe(body).apparent().altaz()
-        loginf("analemma seasons %s" % t_season)
-        loginf("analemma seasons alt %s" % alt_season)
-        loginf("analemma seasons az %s" % az_season)
+        logdbg("analemma seasons %s" % t_season)
+        logdbg("analemma seasons alt %s" % alt_season)
+        logdbg("analemma seasons az %s" % az_season)
         # convert positions to SVG coordinates
         x_factor = width/(max_az-min_az)
         y_factor = height/(min_alt-max_alt)
@@ -719,26 +743,37 @@ class AnalemmaBinder:
         y_season = (alt_season.degrees-min_alt)*y_factor+y0
         x_season = (az_season.degrees-min_az)*x_factor+x0
         s = []
+        # SVG header
         s.append(AnalemmaBinder.SVG_START % (self.width,self.height,0,0,self.width,self.height))
-        s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="currentColor" stroke-width="1" fill="none" />\n' % (x0,y0-height,width,height))
+        # SVG description (always in English, not presented to the user)
+        s.append('<desc>Analemma for %.4f&deg; %s, %08.4f&deg; %s for the year %s at %s</desc>\n' % (
+            abs(self.almanac_obj.lat),
+            'N' if self.almanac_obj.lat>=0 else 'S',
+            abs(self.almanac_obj.lon),
+            'E' if self.almanac_obj.lon>=0 else 'W',
+            time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
+            time.strftime("%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
+        ))
+        s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
+            x0,y0-height,width,height,self.colors[0]))
         # y scale
         for i in range(int(min_alt),int(max_alt)+yscale,yscale):
             y = (i-min_alt)*y_factor+y0
-            if i!=int(min_alt) and i!=int(max_alt):
-                s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="#808080" />\n' % (x0,y,x0+width,y))
-            s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&deg;</text>\n' % (x0-3,y,fontsize,i))
+            if int(min_alt)<i<int(max_alt):
+                s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x0,y,x0+width,y,self.colors[1]))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&deg;</text>\n' % (x0-3,y,self.colors[0],fontsize,i))
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
             x0-2.3*fontsize,y0-0.5*height,fontsize,x0-2.3*fontsize,y0-0.5*height,self.labels.get('Altitude','Altitude')))
         # x scale
         for i in range(int(min_az),int(max_az)+xscale,xscale):
             x = (i-min_az)*x_factor+x0
-            s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="#808080" />\n' % (x,y0,x,y0-height))
-            s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&deg;</text>\n' % (
-                x,y0+fontsize*1.1,fontsize,i))
-        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
-            x0+0.5*width,y0+fontsize*2.2,fontsize,self.labels.get('Azimuth','Azimuth')))
+            s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&deg;</text>\n' % (
+                x,y0+fontsize*1.1,self.colors[0],fontsize,i%360))
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+            x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Azimuth','Azimuth')))
         # analemma
-        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % ('#7cb5ec',xs[0],ys[1]))
+        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[1]))
         for x,y in zip(xs,ys):
             s.append('L%.2f,%.2f' % (x,y))
         s.append('z" />\n')
@@ -747,7 +782,7 @@ class AnalemmaBinder:
         for x,y,t,w in zip(x_season,y_season,user.skyfieldalmanac.skyfield_time_to_djd(t_season),k_season):
             time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
             time_s = str(time_vt).split(' ')[0]
-            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,'#f7a35c'))
+            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,self.colors[3]))
             if w==0:
                 anchor = "end"
                 xoffset = -2*r
@@ -772,27 +807,52 @@ class AnalemmaBinder:
                 else:
                     yoffset = fontsize
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
-                x+xoffset,y+yoffset,'#f7a35c',fontsize*1.1,anchor,time_s))
+                x+xoffset,y+yoffset,self.colors[3],fontsize*1.1,anchor,time_s))
         # caption
-        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle">%s</text>\n' % (0.5*self.width,fontsize*1.5,fontsize*1.5,"Analemma"))
-        # timestamp
-        if self.tz.upper() in {'LMT','UTC'}:
-            # Local Mean Time or UTC
-            format = self.almanac_obj.formatter.time_format_dict.get('ephem_day','%H:%M:%S').replace('%a','').strip()
-            if self.tz.upper=='LMT':
-                localtime = self.almanac_obj.time_ts+self.almanac_obj.lon*240
-                tz = self.labels.get("local mean time","mittlere Ortszeit")
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,self.labels.get("Analemma","Analemma")))
+        formatter = self.almanac_obj.formatter
+        txt = ""
+        if self.show_timestamp:
+            # timestamp
+            if self.tz.upper() in {'LMT','UTC'}:
+                # Local Mean Time or UTC
+                format = self.almanac_obj.formatter.time_format_dict.get('ephem_day','%H:%M:%S').replace('%a','').strip()
+                if self.tz.upper()=='LMT':
+                    localtime = self.almanac_obj.time_ts+self.almanac_obj.lon*240
+                    tz = self.labels.get("local mean time","mittlere Ortszeit")
+                else:
+                    localtime = self.almanac_obj.time_ts
+                    tz = "UTC"
+                txt = "%s %s" % (
+                    time.strftime(format,time.gmtime(localtime)),
+                    tz
+                )
             else:
-                localtime = self.almanac_obj.time_ts
-                tz = "UTC"
-            time_vt = "%s %s" % (
-                time.strftime(format,time.gmtime(localtime)),
-                tz
-            )
-        else:
-            # Civil time according to the actual time zone
-            time_vt = ValueHelper(ValueTuple(self.almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_day',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
-        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle">%s</text>\n' % (0.5*self.width,fontsize*2.7,fontsize*1.1,time_vt))
+                # Civil time according to the actual time zone
+                time_vt = ValueHelper(ValueTuple(self.almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_day',formatter=formatter,converter=self.almanac_obj.converter)
+                txt = str(time_vt)
+        if self.show_location:
+            # location
+            if self.location:
+                # location described by a name
+                txt = "%s, %s" % (txt,self.location)
+            else:
+                # location described by geographic coordinates
+        # location
+                lat_vt = ValueHelper(ValueTuple(self.almanac_obj.lat,'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
+                lon_vt = ValueHelper(ValueTuple(self.almanac_obj.lon,'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
+                lat_s = lat_vt.format("%.4f").replace(' ','&numsp;')
+                lon_s = lon_vt.format("%08.4f")
+                txt = "%s, %s&thinsp;%s, %s&thinsp;%s" % (
+                    txt,
+                    lat_s,
+                    formatter.ordinate_names[0 if self.almanac_obj.lat>=0 else 8],
+                    lon_s,
+                    formatter.ordinate_names[4 if self.almanac_obj.lon>=0 else 12]
+                )
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
         s.append(AnalemmaBinder.SVG_END)
         return "".join(s)
 
