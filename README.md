@@ -11,6 +11,7 @@ Sky map for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
+* [Dark mode of your web site](dark-mode-of-your-website]
 * [Links](#links)
 
 ## Prerequisites
@@ -203,6 +204,21 @@ This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
 
 ![analemma](analemma.png)
+
+## Dark mode of your web site
+
+If you insert the tags into your web page template as described above dark
+mode is observed properly. The background and the text around the map and in
+the diagram is colored as you configured it by CSS for your website in
+general.
+
+The sky color does not depend on light or dark mode but on the time of day.
+It is dark at night and light at day, and in dawn it is in between.
+
+But if you save the images created by the tags to separate files and
+include them using the `<img>` tag (what we do NOT recommend), then you will 
+have to set up colors appropriately by the `colors` parameter or
+configuration option.
 
 ## Links
 
