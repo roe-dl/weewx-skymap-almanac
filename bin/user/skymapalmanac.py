@@ -130,6 +130,8 @@ class SkymapBinder:
         self.width = 800
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
         self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
+        if 'venus_phases' not in almanac_obj.__dict__:
+            almanac_obj.venus_phases = ['new','waxing crescent','half','waxing gibbous','full','waning gibbous','half','waning crescent','N/A']
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -277,6 +279,30 @@ class SkymapBinder:
         logdbg("ecliptic elapsed CPU time %.3fms %.3fms %.3fms %.3fms" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
         s.append('</g>\n')
         return ''.join(s)
+
+    @staticmethod
+    def venus_phase(t):
+        """ phase of venus at time t """
+        # position of Earth at time t
+        e0 = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH].at(t)
+        # time the light needs to get from venus to Earth
+        diff_t = e0.observe(user.skyfieldalmanac.ephemerides['venus']).apparent().light_time
+        # timestamp when the light started at Venus to arrive at Earth at time t
+        try:
+            len(t)
+            tv = ts.tt_jd([x.tt for x in (t-diff_t)])
+        except TypeError:
+            tv = t - diff_t
+        # position of Venus at that time
+        v = user.skyfieldalmanac.ephemerides['venus'].at(tv)
+        # direction of the Sun seen from Venus at that time
+        s = v.observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.SUN]).apparent()
+        # direction of the light starting at Venus to arrive at the position
+        # the Earth will be later on at time t
+        e = e0-v
+        # return the angle between the direction to the Sun and the direction
+        # to where the Earth will be
+        return s.separation_from(e)
 
     def get_text(self, text):
         """ get localized text """
@@ -459,10 +485,14 @@ class SkymapBinder:
                     # planets other than earth
                     radius = user.skyfieldalmanac.SIZES[body.split('_')[0]][0]/distance.km*RAD2DEG
                     r = SkymapBinder.magnitude_to_r(magnitude)
-                    """
-                    r = (6.0-magnitude)*0.1
-                    if r<0.2: r = 0.2
-                    """
+                    if body in {'mercury','venus'}:
+                        phase, dir, idx = user.skyfieldalmanac.planet_phase(body_eph,time_ti)
+                        txt += '\n%s: %.0f&deg; idx=%s %s' % (
+                            self.get_text('Phase angle'),
+                            #SkymapBinder.venus_phase(time_ti).degrees
+                            phase.degrees,
+                            idx,almanac_obj.venus_phases[idx]
+                        )
                 else:
                     # other heavenly objects including Pluto
                     radius = None
