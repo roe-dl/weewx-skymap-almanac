@@ -11,7 +11,7 @@ Sky map for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
-* [Dark mode of your web site](dark-mode-of-your-website]
+* [Dark mode of your web site](#dark-mode-of-your-website]
 * [Links](#links)
 
 ## Prerequisites

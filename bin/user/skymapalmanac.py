@@ -132,6 +132,8 @@ class SkymapBinder:
         self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
         if 'venus_phases' not in almanac_obj.__dict__:
             almanac_obj.venus_phases = ['new','waxing crescent','half','waxing gibbous','full','waning gibbous','half','waning crescent','N/A']
+        if 'mercury_phases' not in almanac_obj.__dict__:
+            almanac_obj.mercury_phases = ['new','waxing crescent','half','waxing gibbous','full','waning gibbous','half','waning crescent','N/A']
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -428,8 +430,11 @@ class SkymapBinder:
         dots = []
         for body in (self.bodies+self.earthsatellites):
             format = self.formats.get(body,self.formats.get('%s_*' % body.split('_')[0]))
-            body_eph = user.skyfieldalmanac.ephemerides[body.lower()]
-            if isinstance(body_eph,EarthSatellite):
+            body_eph = user.skyfieldalmanac.ephemerides.get(body.lower())
+            if body_eph is None:
+                logerr("No data for heavenly object '%s' available. Is that a satellite that passed away?" % body)
+                continue
+            elif isinstance(body_eph,EarthSatellite):
                 apparent = (body_eph-station).at(time_ti)
                 label = '%s (#%s)' % (self.labels.get(body,body_eph.name),body_eph.model.satnum)
                 short_label = body_eph.name
