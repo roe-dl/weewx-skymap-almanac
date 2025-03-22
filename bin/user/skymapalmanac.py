@@ -410,7 +410,11 @@ class SkymapBinder:
             # calculate all the positions in the sky
             apparent = observer.at(time_ti).observe(selected_stars).apparent()
             alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-            for alt, az, distance, mag, hip in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index):
+            if user.skyfieldalmanac.constellation_at:
+                abbrs = user.skyfieldalmanac.constellation_at(apparent)
+            else:
+                abbrs = [None]*len(alts)
+            for alt, az, distance, mag, hip, abbr in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index,abbrs):
                 if alt>=0:
                     x,y = self.to_xy(alt,az)
                     if varsize: r = SkymapBinder.magnitude_to_r(mag)
@@ -418,6 +422,9 @@ class SkymapBinder:
                         txt = user.skyfieldalmanac.hip_to_starname(hip,'')
                         if txt: txt += '\n'
                         txt += 'HIP%s\n' % hip
+                        if abbr and user.skyfieldalmanac.constellation_names:
+                            nm = user.skyfieldalmanac.constellation_names[abbr]
+                            txt += '%s (%s)\n' % (nm,abbr)
                         if distance:
                             txt += '%s: %.0f %s\n' % (self.get_text('Distance'),distance,'Lj')
                         txt = '><title>%s%s: %.2f</title></circle>' % (txt,self.get_text('Magnitude'),mag)
