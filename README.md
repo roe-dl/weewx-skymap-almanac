@@ -12,6 +12,7 @@ Sky map for WeeWX
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Dark mode of your web site](#dark-mode-of-your-website)
+* [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javaScript)
 * [Credits](#credits)
 * [Links](#links)
 
@@ -225,6 +226,65 @@ But if you save the images created by the tags to separate files and
 include them using the `<img>` tag (what we do NOT recommend), then you will 
 have to set up colors appropriately by the `colors` parameter or
 configuration option.
+
+## Changing visibility of elements by JavaScript
+
+If you want your users to be able to switch on and off some parts of the
+map, for example the constellation lines, you can do so by JavaScript.
+The elements have IDs for that. 
+
+To switch off the constellations lines the script looks like this:
+```JavaScript
+let el = document.getElementById('constellations');
+if (el)
+  {
+    el.style.display = "none";
+  }
+```
+
+To switch on the constellation lines the script looks like this:
+```JavaScript
+<script>
+let el = document.getElementById('constellations');
+if (el)
+  {
+    el.removeProperty("display");
+  }
+</script>
+```
+
+You cannot only switch on and off elements, but also change the color to
+highlight it. This script highlights Polaris by enlarging its diameter
+and changing its color and reverts to the original values after a short
+period of time:
+```JavaScript
+let el = document.getElementById('HIP11767');
+if (el)
+  {
+    let r = el.getAttribute("r");
+    let f = el.getAttribute("fill");
+    el.setAttribute("r","3");
+    el.setAttribute("fill","#00f");
+    setTimeout(() => {
+        el.setAttribute("r",r);
+        el.setAttribute("fill",f);
+    }, 1000);
+  }
+```
+
+If you assign that script to a button, the user can easily find the star
+on the map by pressing the button.
+
+The following IDs are defined:
+* `circle_of_right_ascension`: circle of right ascension and border of the
+  circumpolar area
+* `circle_of_ecliptic`: dotted line of the circle of the ecliptic
+* `constellations`: constellation lines
+* `constellation_`+constellation abbreviation: the lines of a specific 
+  constellation, named by its international abbreviation
+* planet name: a planet on the map (add `_barcenter` for the outer planets)
+* Earth satellite ID: an Earth satellite
+* `HIP`+Hipparcos catalogue number: a single star on the map
 
 ## Credits
 

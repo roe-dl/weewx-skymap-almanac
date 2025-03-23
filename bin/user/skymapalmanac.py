@@ -221,11 +221,10 @@ class SkymapBinder:
         """ draw constellation lines 
         
             Args:
-                almanac_obj (AlmanacType):
-                time_ti (Time):
                 alts_degrees (list): altitudes of the stars
                 azs_radians (list): azimuths of the stars
                 hips (list): Hipparcos catalogue numbers of the stars
+                color (str): line color
             
             Returns:
                 str: constellation lines
@@ -237,12 +236,11 @@ class SkymapBinder:
         # index of the Hipparcos catalogue numbers in the list
         hips_index = {val:idx for idx,val in enumerate(hips)}
         # format
-        s = ['<path id="constellations" stroke="%s" stroke-width="0.1" fill="none" d="' % color]
+        s = ['<g id="constellations" stroke="%s" stroke-width="0.1" fill="none">' % color]
         # loop over all the constellations
         for constellation in self.constellationship[0]:
-            # lines of a constellation
-            name = constellation[0]
             # loop over all lines of the constellation
+            d = []
             for line in constellation[1]:
                 # one single line
                 p1 = hips_index.get(line[0])
@@ -251,10 +249,13 @@ class SkymapBinder:
                     # both stars are available
                     x1, y1 = self.to_xy(alts_degrees[p1],azs_radians[p1])
                     x2, y2 = self.to_xy(alts_degrees[p2],azs_radians[p2])
-                    s.append('M%s,%sL%s,%s' % (x1,y1,x2,y2))
-        s.append('" />\n')
+                    d.append('M%.4f,%.4fL%.4f,%.4f' % (x1,y1,x2,y2))
+            # If there are lines in the visible part of the sky, add them.
+            if d:
+                s.append('<path id="constellation_%s" d="%s" />\n' % (constellation[0],''.join(d)))
+        s.append('</g>\n')
         return ''.join(s)
-        
+    
     def circle_of_right_ascension(self, observer, almanac_obj, time_ti, color='#808080'):
         """ draw circle of that declination that touches the horizon 
         
@@ -401,13 +402,13 @@ class SkymapBinder:
             # dark night (sun below 18 degrees below the horizon)
             background_color = self.night_color
             moon_background_color = '#2a2927'
-            constellation_line_color = '#808000'
+            constellation_line_color = '#909000'
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
             background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
             moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
-            constellation_line_color = '#808000'
+            constellation_line_color = '#A0A000'
         background_color = "#%02X%02X%02X" % background_color
         s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
         # start clipping
@@ -458,7 +459,6 @@ class SkymapBinder:
             if not varsize:
                 r = weeutil.weeutil.to_float(format[0])
             col = format[1]
-            s.append('<g fill="%s" stroke="none">\n' % col)
             # filter
             df = df[df['magnitude'] <= self.max_magnitude]
             # create Star instance
@@ -466,7 +466,7 @@ class SkymapBinder:
             # calculate all the positions in the sky
             apparent = observer.at(time_ti).observe(selected_stars).apparent()
             alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-            # constellationship lines
+            # draw constellationship lines
             if self.show_constellations and self.constellationship and self.constellationship[0]:
                 s.append(self.draw_constellationship(alts.degrees, azs.radians, df.index, constellation_line_color))
             # constellation names
@@ -475,6 +475,7 @@ class SkymapBinder:
             else:
                 abbrs = [None]*len(alts)
             # draw stars
+            s.append('<g fill="%s" stroke="none">\n' % col)
             for alt, az, distance, mag, hip, abbr in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index,abbrs):
                 if alt>=0:
                     x,y = self.to_xy(alt,az)
