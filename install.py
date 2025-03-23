@@ -23,5 +23,5 @@ class SkymapInstaller(ExtensionInstaller):
                     }
                 }
             },
-            files=[('bin/user', ['bin/user/skymapalmanac.py'])]
+            files=[('bin/user', ['bin/user/skymapalmanac.py','bin/user/constellationship.fab'])]
         )

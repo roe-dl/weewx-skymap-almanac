@@ -98,14 +98,27 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         raise weewx.UnknownType(attr)
 
     def get_labels(self, almanac_obj):
-        # TODO: get this from the skin
-        labels = {'sun':'Sun','moon':'Moon','mercury':'Mercury','venus':'Venus','mars_barycenter':'Mars','jupiter_barycenter':'Jupiter','saturn_barycenter':'Saturn','neptune_barycenter':'Neptune','pluto_barycenter':'Pluto'}
+        """ get dictionary of labels and names in local language """
+        # names of the planets in local language if available otherwise in English
+        planet_names = almanac_obj.__dict__.get(
+            'planet_names',
+            almanac_obj.__dict__.get('texts',dict()).get(
+                'planet_names',
+                list((i.capitalize() for i in user.skyfieldalmanac.PLANETS))
+            )
+        )
+        labels = {i:planet_names[j] for i,j in user.skyfieldalmanac.PLANETS_IDX.items() if j<len(planet_names)}
+        # find the language of this skin
         new_moon = almanac_obj.moon_phases[0]
         for lang, val in self.config_dict['Texts'].items():
             if val['moon_phase_new_moon']==new_moon:
                 labels.update(val)
                 break
+        # get other entries from [Almanac] section
+        if 'texts' in almanac_obj.__dict__:
+            labels.update({i:j for i,j in almanac_obj.texts.items() if i not in {'planet_names','moon_phases','venus_phases','mercury_phases'}})
         return labels
+
 
 class SkymapBinder:
     """ SVG map of the sky showing the position of heavenly bodies """
@@ -117,12 +130,13 @@ class SkymapBinder:
         self.almanac_obj = almanac_obj
         self.labels = labels
         self.log_failure = config_dict['log_failure']
-        self.bodies = config_dict.get('bodies',['sun','moon','mercury','venus','mars_barycenter','jupiter_barycenter','saturn_barycenter','uranus_barycenter','neptune_barycenter','pluto_barycenter'])
+        self.bodies = config_dict.get('bodies',user.skyfieldalmanac.planets_list+[user.skyfieldalmanac.SUN,user.skyfieldalmanac.EARTHMOON])
         self.earthsatellites = config_dict.get('earth_satellites',[])
         self.show_stars = weeutil.weeutil.to_bool(config_dict.get('show_stars',True))
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
         self.show_ecliptic = weeutil.weeutil.to_bool(config_dict.get('show_ecliptic',True))
+        self.show_constellations = weeutil.weeutil.to_bool(config_dict.get('show_constellations',True))
         self.formats = config_dict['Formats']
         self.night_color = (0,0,64) # #000040
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
@@ -131,9 +145,10 @@ class SkymapBinder:
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
         self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
         if 'venus_phases' not in almanac_obj.__dict__:
-            almanac_obj.venus_phases = ['new','waxing crescent','half','waxing gibbous','full','waning gibbous','half','waning crescent','N/A']
+            almanac_obj.venus_phases = user.skyfieldalmanac.DEFAULT_PHASES
         if 'mercury_phases' not in almanac_obj.__dict__:
-            almanac_obj.mercury_phases = ['new','waxing crescent','half','waxing gibbous','full','waning gibbous','half','waning crescent','N/A']
+            almanac_obj.mercury_phases = user.skyfieldalmanac.DEFAULT_PHASES
+        self.constellationship = config_dict.get('Constellationship',(None,None))
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -202,6 +217,44 @@ class SkymapBinder:
         return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (
             color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
 
+    def draw_constellationship(self, alts_degrees, azs_radians, hips, color):
+        """ draw constellation lines 
+        
+            Args:
+                almanac_obj (AlmanacType):
+                time_ti (Time):
+                alts_degrees (list): altitudes of the stars
+                azs_radians (list): azimuths of the stars
+                hips (list): Hipparcos catalogue numbers of the stars
+            
+            Returns:
+                str: constellation lines
+            
+            self.constellationship(list): list of constellations, containing
+                a tuple of the abbreviation of the constellation name and
+                a list of tuples, each of them representing a line
+        """
+        # index of the Hipparcos catalogue numbers in the list
+        hips_index = {val:idx for idx,val in enumerate(hips)}
+        # format
+        s = ['<path id="constellations" stroke="%s" stroke-width="0.1" fill="none" d="' % color]
+        # loop over all the constellations
+        for constellation in self.constellationship[0]:
+            # lines of a constellation
+            name = constellation[0]
+            # loop over all lines of the constellation
+            for line in constellation[1]:
+                # one single line
+                p1 = hips_index.get(line[0])
+                p2 = hips_index.get(line[1])
+                if p1 and p2 and (alts_degrees[p1]>=0 or alts_degrees[p2]>=0):
+                    # both stars are available
+                    x1, y1 = self.to_xy(alts_degrees[p1],azs_radians[p1])
+                    x2, y2 = self.to_xy(alts_degrees[p2],azs_radians[p2])
+                    s.append('M%s,%sL%s,%s' % (x1,y1,x2,y2))
+        s.append('" />\n')
+        return ''.join(s)
+        
     def circle_of_right_ascension(self, observer, almanac_obj, time_ti, color='#808080'):
         """ draw circle of that declination that touches the horizon 
         
@@ -343,15 +396,18 @@ class SkymapBinder:
             # light day (sun above horizon)
             background_color = self.day_color
             moon_background_color = '#cfcfe6'
+            constellation_line_color = '#B0B000'
         elif alt.degrees<(-18):
             # dark night (sun below 18 degrees below the horizon)
             background_color = self.night_color
             moon_background_color = '#2a2927'
+            constellation_line_color = '#808000'
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
             background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
             moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
+            constellation_line_color = '#808000'
         background_color = "#%02X%02X%02X" % background_color
         s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
         # start clipping
@@ -410,10 +466,15 @@ class SkymapBinder:
             # calculate all the positions in the sky
             apparent = observer.at(time_ti).observe(selected_stars).apparent()
             alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+            # constellationship lines
+            if self.show_constellations and self.constellationship and self.constellationship[0]:
+                s.append(self.draw_constellationship(alts.degrees, azs.radians, df.index, constellation_line_color))
+            # constellation names
             if user.skyfieldalmanac.constellation_at:
                 abbrs = user.skyfieldalmanac.constellation_at(apparent)
             else:
                 abbrs = [None]*len(alts)
+            # draw stars
             for alt, az, distance, mag, hip, abbr in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index,abbrs):
                 if alt>=0:
                     x,y = self.to_xy(alt,az)
@@ -982,6 +1043,7 @@ class SkymapService(StdService):
         alm_conf_dict = _get_config(config_dict)
         if alm_conf_dict['enable']:
             alm_conf_dict['Texts'] = self.process_language(config_dict)
+            alm_conf_dict['Constellationship'] = self.process_constellationship(config_dict)
             # instantiate the Skymap almanac
             self.skymap_almanac = SkymapAlmanacType(alm_conf_dict, self.path, engine.stn_info.location)
             # add to the list of almanacs
@@ -1116,3 +1178,24 @@ class SkymapService(StdService):
             logdbg('%s: %s' % (lang,conf))
             lang_dict[lang] = conf
         return lang_dict
+
+    def process_constellationship(self, config_dict):
+        """ import Stellarium's constellationship.fab file
+        
+            The file `constellationship.fab` is licensed under GPL 2.0 by 
+            Stellarium. As weewx-skymap-almanac is licensed under GPL 3.0,
+            the file can be used here according to its license.
+        """
+        import skyfield.data.stellarium
+        fn = os.path.dirname(os.path.realpath(__file__))
+        fn = os.path.join(fn,'constellationship.fab')
+        constellations = []
+        with open(fn,'rb') as f:
+            constellations = skyfield.data.stellarium.parse_constellations(f)
+            logdbg('successfully parsed %s lines of constellationship.fab' % len(constellations))
+        stars = []
+        for i in constellations:
+            for j in i[1]:
+                stars.extend(j)
+        stars = set(stars)
+        return constellations, stars

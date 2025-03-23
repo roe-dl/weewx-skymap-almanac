@@ -12,6 +12,7 @@ Sky map for WeeWX
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Dark mode of your web site](#dark-mode-of-your-website)
+* [Credits](#credits)
 * [Links](#links)
 
 ## Prerequisites
@@ -81,6 +82,8 @@ available if you have special requirements.
         show_location = true
         # flag whether to show the ecliptic as a dotted line
         show_ecliptic = true
+        # flag whether to show the constellation lines between the stars
+        show_constellations = true
         # format options
         [[[Formats]]]
             stars = mag, '#ff0'
@@ -111,6 +114,9 @@ available if you have special requirements.
   Default `True`.
 * `show_ecliptic`: Flag whether to show the ecliptic as a dotted line.
   Optional. Default `True`.
+* `show_constellations`: Flag whether to show the constellation lines
+  between the stars. Optional. Default `True`. Uses the 
+  `constellationship.fab` file of Stellarium.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
   `['rgba(255,243,228,0.5)','#ffecd5']`
 * `analemma_colors`: Colors for `analemma`. Optional. Default
@@ -219,6 +225,12 @@ But if you save the images created by the tags to separate files and
 include them using the `<img>` tag (what we do NOT recommend), then you will 
 have to set up colors appropriately by the `colors` parameter or
 configuration option.
+
+## Credits
+
+* [Tom Keffer et al.](https://weewx.com)
+* [Brandon Rhodes](https://github.com/skyfielders/python-skyfield)
+* [Stellarium](https://github.com/Stellarium/stellarium/discussions/790)
 
 ## Links
 
