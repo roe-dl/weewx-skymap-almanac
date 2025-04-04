@@ -282,15 +282,15 @@ The following IDs are defined:
 * `constellations`: constellation lines
 * `constellation_`+constellation abbreviation: the lines of a specific 
   constellation, named by its international abbreviation
-* planet name: a planet on the map (add `_barcenter` for the outer planets)
+* planet name: a planet on the map (add `_barycenter` for the outer planets)
 * Earth satellite ID: an Earth satellite
 * `HIP`+Hipparcos catalogue number: a single star on the map
 
 ## Credits
 
-* [Tom Keffer et al.](https://weewx.com)
-* [Brandon Rhodes](https://github.com/skyfielders/python-skyfield)
-* [Stellarium](https://github.com/Stellarium/stellarium/discussions/790)
+* [Tom Keffer et al. (WeeWX)](https://github.com/weewx/weewx)
+* [Brandon Rhodes (Skyfield)](https://github.com/skyfielders/python-skyfield)
+* [Fabien Chereau (Stellarium)](https://github.com/Stellarium/stellarium/discussions/790)
 
 ## Links
 

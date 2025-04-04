@@ -208,7 +208,7 @@ class SkymapBinder:
     def magnitude_to_r(magnitude):
         """ get radius to draw out of magnitude """
         r = (6.0-magnitude)*0.1
-        if r<0.01: r = 0.01
+        if r<0.05: r = 0.05
         return r
     
     @staticmethod
@@ -484,9 +484,18 @@ class SkymapBinder:
                         txt = user.skyfieldalmanac.hip_to_starname(hip,'')
                         if txt: txt += '\n'
                         txt += 'HIP%s\n' % hip
-                        if abbr and user.skyfieldalmanac.constellation_names:
-                            nm = user.skyfieldalmanac.constellation_names[abbr]
-                            txt += '%s (%s)\n' % (nm,abbr)
+                        if abbr:
+                            if abbr in self.labels.get('Constellations',dict()):
+                                # constellation name in local language
+                                nm = self.labels['Constellations'][abbr]
+                            elif user.skyfieldalmanac.constellation_names:
+                                # constellation name in latin
+                                nm = user.skyfieldalmanac.constellation_names[abbr]
+                            else:
+                                # constellation name not available
+                                nm = None
+                            if nm:
+                                txt += '%s (%s)\n' % (nm,abbr)
                         if distance:
                             txt += '%s: %.0f %s\n' % (self.get_text('Distance'),distance,'Lj')
                         txt = '><title>%s%s: %.2f</title></circle>' % (txt,self.get_text('Magnitude'),mag)
@@ -519,14 +528,39 @@ class SkymapBinder:
                     i = body_eph.name.find('(MSG-')
                     short_label = body_eph.name[i+5:].split(')')[0].strip()
                 magnitude = None
+                constellation_name = ''
             else:
+                # apparent position
                 apparent = observer.at(time_ti).observe(body_eph).apparent()
+                # label
                 label = self.get_text(body)
                 short_label = label
+                # magnitude
                 try:
                     magnitude = planetary_magnitude(apparent)
                 except (AttributeError,ArithmeticError,ValueError,TypeError):
                     magnitude = None
+                # constellation names
+                if user.skyfieldalmanac.constellation_at:
+                    abbr = user.skyfieldalmanac.constellation_at(apparent)
+                    if abbr:
+                        if abbr in self.labels.get('Constellations',dict()):
+                            nm = self.labels['Constellations'][abbr]
+                        elif user.skyfieldalmanac.constellation_names:
+                            nm = user.skyfieldalmanac.constellation_names[abbr]
+                        else:
+                            nm = None
+                        if nm:
+                            constellation_name = '\n%s: %s (%s)' % (
+                                self.get_text('In constellation'),
+                                self.get_text(nm),
+                                abbr)
+                        else:
+                            constellation_name = ''
+                    else:
+                        constellation_name = ''
+                else:
+                    constellation_name = ''
             alt, az, distance = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
             if alt.degrees>=0:
                 ra, dec, _ = apparent.radec('date')
@@ -536,11 +570,12 @@ class SkymapBinder:
                 # horizontal coordinate system: altitude, azimuth
                 # rotierendes äquatoriales Koordinatensystem: ra dec
                 # ortsfestes äquatoriales Koordindatensystem: ha dec
-                txt = '%s\n%s=%.1f&deg; %s=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;' % (
+                txt = '%s\n%s=%.1f&deg; %s=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;%s' % (
                     label,
                     self.get_text('Altitude'),alt.degrees,
                     self.get_text('Azimuth'),az.degrees,ordinates[dir],
-                    ra.hours,dec.degrees)
+                    ra.hours,dec.degrees,
+                    constellation_name)
                 phase = None
                 if body=='sun':
                     # sun (radius about 16/60°)
@@ -559,6 +594,7 @@ class SkymapBinder:
                     # planets other than earth
                     radius = user.skyfieldalmanac.SIZES[body.split('_')[0]][0]/distance.km*RAD2DEG
                     r = SkymapBinder.magnitude_to_r(magnitude)
+                    if r<0.2: r = 0.2
                     if body in {'mercury','venus'}:
                         phase, dir, idx = user.skyfieldalmanac.planet_phase(body_eph,time_ti)
                         txt += '\n%s: %.0f&deg; idx=%s %s' % (
@@ -1113,6 +1149,7 @@ class SkymapService(StdService):
                     'Magnitude':'Magnitude',
                     'First point of Aries':'Frühlingspunkt',
                     'Apparent size':'Scheinbare Größe',
+                    'In constellation':'Im Sternbild',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -1126,6 +1163,7 @@ class SkymapService(StdService):
                     'Distance':'Vzdálenost',
                     'Magnitude':'Hvězdná velikost',
                     'First point of Aries':'Jarní bod',
+                    'In constellation':'V souhvězdí',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'venus':'Venuše',
@@ -1139,6 +1177,8 @@ class SkymapService(StdService):
                 conf.update({
                     'Solar time':'Zonnetijd',
                     'Sidereal time':'Sterrentijd',
+                    'Distance':'Afstand',
+                    'In constellation':'in het sterrenbeeld',
                     # planet names that are different from English
                     'mercury':'Mercurius',
                     'earth':'de Aarde',
