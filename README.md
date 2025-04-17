@@ -182,6 +182,8 @@ Add `$almanac.moon_symbol` to your skin.
 You can change the size of the symbol by setting the parameter `width` like
 `$almanac.moon_symbol(width=200)`.
 
+To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
+
 ## Analemma
 
 ### Usage
@@ -290,7 +292,7 @@ The following IDs are defined:
 
 * [Tom Keffer et al. (WeeWX)](https://github.com/weewx/weewx)
 * [Brandon Rhodes (Skyfield)](https://github.com/skyfielders/python-skyfield)
-* [Fabien Chereau (Stellarium)](https://github.com/Stellarium/stellarium/discussions/790)
+* [Fabien Chéreau (Stellarium)](https://github.com/Stellarium/stellarium/discussions/790)
 
 ## Links
 

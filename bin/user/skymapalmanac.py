@@ -43,7 +43,7 @@ import skyfield.units
 # Logging
 import weeutil.logger
 import logging
-log = logging.getLogger("user.skymapdalmanac")
+log = logging.getLogger("user.skymapalmanac")
 
 def logdbg(msg):
     log.debug(msg)
@@ -761,28 +761,46 @@ class MoonSymbolBinder:
         self.labels = labels
         self.colors = colors
         self.width = 50
+        self.with_tilt = True
     
-    def __call__(self, width=None):
+    def __call__(self, width=None, with_tilt=None):
         if width:
             self.width = weeutil.weeutil.to_int(width)
+        if with_tilt is not None:
+            self.with_tilt = with_tilt
         return self
     
     def __str__(self):
         return self.moon_symbol()
     
+    def get_moon_tilt(self, time_ti):
+        """ calculate moon tilt angle """
+        try:
+            observer = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH] + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
+            alt_moon, az_moon, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTHMOON]).apparent().altaz()
+            alt_sun, az_sun, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.SUN]).apparent().altaz()
+            alpha = user.skyfieldalmanac.moon_tilt(alt_moon.radians,alt_sun.radians,az_moon.radians-az_sun.radians)
+        except (LookupError,TypeError,ValueError,ArithmeticError) as e:
+            logerr('error calculating moon tilt angle: %s %s' % (e.__class__.__name__,e))
+            alpha = None
+        return alpha
+    
     def moon_symbol(self):
         """ create an SVG image of the moon showing her phases """
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(self.almanac_obj.time_ts)
-        phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.sun_and_planets,time_ti)
+        alpha = self.get_moon_tilt(time_ti) if self.with_tilt else None
+        phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.ephemerides,time_ti)
         moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
         ptext = self.almanac_obj.moon_phases[moon_index]
         txt = self.labels.get('moon','moon').capitalize()
         txt += '\n%s: %.0f&deg; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
+        if alpha is not None:
+            txt += '\n%s: %.0f&deg;' % (self.labels.get('Tilt','Tilt'),alpha*180.0/numpy.pi)
         return '%s%s%s%s%s' % (
             SkymapAlmanacType.SVG_START % (self.width,self.width),
             '<desc>the Moon, phase %.1f&deg;</desc>\n' % phase.degrees,
-            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
-            moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',None),
+            '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
+            moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
             SkymapAlmanacType.SVG_END
         )
         return s
@@ -1031,39 +1049,47 @@ class AnalemmaBinder:
 
 def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
     """ create SVG image of the moon showing her phase """
+    id = ' id="%s"' % id if id else ''
+    fullness = numpy.cos(phase.radians)
     phase = round(phase.degrees,1)%360
     full_moon = phase==180.0
     new_moon = phase==0.0
+    # moon tilt and waxing/waning
+    if shape is None or isinstance(shape, str):
+        alpha = numpy.pi if phase>180.0 else 0.0
+    else:
+        alpha = shape
     s = []
-    s.append('<g><title>%s</title>\n' % txt)
+    s.append('<g%s><title>%s</title>\n' % (id,txt))
     s.append('<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col[1] if full_moon else col[0]))
     if not full_moon and not new_moon:
-        desc = 0 if phase>180.0 else 1
-        phase180 = phase%180
-        quarter = 0 if phase180<90 else 1
-        fullness = (phase180-90.0 if phase180>90.0 else 90.0-phase180)/90.0
-        s.append('<path fill="%s" stroke="none" d="M%.4f,%.4fa%.4f,%.4f 0 0 %s %.4f,%.4f' % (col[1],x,y-r,r,r,desc,0,2*r))
+        xr = -r*numpy.sin(alpha)
+        yr = r*numpy.cos(alpha)
+        #loginf('alpha=%s xr=%s yr=%s' % (alpha,xr,yr))
+        s.append('<path fill="%s" stroke="none" d="M%.4f,%.4fa%.4f,%.4f 0 0 %s %.4f,%.4f' % (col[1],x+xr,y-yr,r,r,1,-2*xr,2*yr))
         if phase!=90.0 and phase!=270.0:
-            s.append('a%.4f,%.4f 0 0 %s %.4f %.4f' % (fullness*r,r,quarter,0,-2*r))
+            quarter = 0 if fullness>=0.0 else 1
+            fullness = numpy.abs(fullness)
+            s.append('a%.4f,%.4f %.4f 0 %s %.4f,%.4f' % (fullness*r,r,-alpha*180.0/numpy.pi,quarter,2*xr,-2*yr))
         s.append('z" />\n')
     s.append('</g>\n')
     return ''.join(s)
-    
+
 def moonphasetest():
     """ test moon phases in the moon symbol """
     s = ""
-    s+=moon('30',-50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=30),'',None)
-    s+=moon('60',-30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=60),'',None)
-    s+=moon('90',-10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=90),'',None)
-    s+=moon('120',10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=120),'',None)
-    s+=moon('150',30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=150),'',None)
-    s+=moon('180',50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=180),'',None)
-    s+=moon('210',-50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=210),'',None)
-    s+=moon('240',-30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=240),'',None)
-    s+=moon('270',-10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=270),'',None)
-    s+=moon('300',10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=300),'',None)
-    s+=moon('330',30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=330),'',None)
-    s+=moon('360',50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=360),'',None)
+    s+=moon(None,'30',-50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=30),'',None)
+    s+=moon(None,'60',-30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=60),'',None)
+    s+=moon(None,'90',-10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=90),'',None)
+    s+=moon(None,'120',10,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=120),'',None)
+    s+=moon(None,'150',30,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=150),'',None)
+    s+=moon(None,'180',50,90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=180),'',None)
+    s+=moon(None,'210',-50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=210),'',None)
+    s+=moon(None,'240',-30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=240),'',None)
+    s+=moon(None,'270',-10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=270),'',None)
+    s+=moon(None,'300',10,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=300),'',None)
+    s+=moon(None,'330',30,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=330),'',None)
+    s+=moon(None,'360',50,-90,10,None,['rgba(255,243,228,0.3)','#ffecd5'],0,skyfield.units.Angle(degrees=360),'',None)
     return s
 
 
