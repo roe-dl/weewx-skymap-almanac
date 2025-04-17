@@ -19,7 +19,7 @@
 
 """
 
-VERSION="0.1"
+VERSION="0.2"
 
 import time
 import os.path
