@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Almanac extension to WeeWX using Skyfield
-# Copyright (C) 2025 Johanna Roedenbeck
+# Copyright (C) 2025 Johanna Karen Roedenbeck
 
 """
 
@@ -17,6 +17,20 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""
+
+"""
+    Note: If SVG images are displayed standalone, HTML entities are not
+          recognized.
+    
+    Symbols:
+    Copyright symbol       ©  &#169;
+    Degree symbol          °  &#176;
+    Minute symbol          ′  &#8242;
+    Second symbol          ″  &#8243;
+    Numeric space             &#8199;
+    Narrow no-break space     &#8239;
+    Thin space                &#8201;
 """
 
 VERSION="0.2"
@@ -69,13 +83,13 @@ def _get_config(config_dict):
 
 class SkymapAlmanacType(weewx.almanac.AlmanacType):
 
-    SVG_START = '''<svg
+    SVG_START = '<svg'
+    SVG_START_ATTR ='''
   width="%s" height="%s" 
   viewBox="-100 -100 200 200"
   xmlns="http://www.w3.org/2000/svg">
 '''
-    SVG_END = '''</svg>
-'''
+    SVG_END = '</svg>\n'
 
     def __init__(self, config_dict, path, station_location):
         self.config_dict = config_dict
@@ -125,7 +139,7 @@ class SkymapBinder:
 
     def __init__(self, config_dict, station_location, almanac_obj, labels):
         self.config_dict = config_dict
-        self.credits = '&copy; '+station_location
+        self.credits = '%s %s' % (labels['©'],station_location)
         self.location = ''
         self.almanac_obj = almanac_obj
         self.labels = labels
@@ -149,6 +163,8 @@ class SkymapBinder:
         if 'mercury_phases' not in almanac_obj.__dict__:
             almanac_obj.mercury_phases = user.skyfieldalmanac.DEFAULT_PHASES
         self.constellationship = config_dict.get('Constellationship',(None,None))
+        self.x = None
+        self.y = None
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -379,9 +395,11 @@ class SkymapBinder:
         station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
         width = self.width if self.width else 800
         s = [
-            SkymapAlmanacType.SVG_START % (width,width),
+            SkymapAlmanacType.SVG_START,
+            ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
+            SkymapAlmanacType.SVG_START_ATTR % (width,width),
             # SVG description (always in English, not presented to the user)
-            '<desc>Sky map for %.4f&deg; %s, %08.4f&deg; %s on %s</desc>\n' % (
+            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s</desc>\n' % (
                 abs(self.almanac_obj.lat),
                 'N' if self.almanac_obj.lat>=0 else 'S',
                 abs(self.almanac_obj.lon),
@@ -421,8 +439,8 @@ class SkymapBinder:
         s.append('" />\n')
         for i in range(11):
             if i!=5:
-                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&deg;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
-                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&deg;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
+                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&#176;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
+                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&#176;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
         # celestial pole and equator
         # displayed for latitude more than 5 degrees north or south only
         if abs(almanac_obj.lat)>5.0:
@@ -570,7 +588,7 @@ class SkymapBinder:
                 # horizontal coordinate system: altitude, azimuth
                 # rotierendes äquatoriales Koordinatensystem: ra dec
                 # ortsfestes äquatoriales Koordindatensystem: ha dec
-                txt = '%s\n%s=%.1f&deg; %s=%.1f&deg; %s\nra=%.1fh dec=%.1f&deg;%s' % (
+                txt = '%s\n%s=%.1f&#176; %s=%.1f&#176; %s\nra=%.1fh dec=%.1f&#176;%s' % (
                     label,
                     self.get_text('Altitude'),alt.degrees,
                     self.get_text('Azimuth'),az.degrees,ordinates[dir],
@@ -589,7 +607,7 @@ class SkymapBinder:
                     phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.sun_and_planets,time_ti)
                     moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
                     ptext = almanac_obj.moon_phases[moon_index]
-                    txt += '\n%s: %.0f&deg; %s' % (self.get_text('Phase').capitalize(),phase.degrees,ptext)
+                    txt += '\n%s: %.0f&#176; %s' % (self.get_text('Phase').capitalize(),phase.degrees,ptext)
                 elif body in user.skyfieldalmanac.planets_list and magnitude is not None:
                     # planets other than earth
                     radius = user.skyfieldalmanac.SIZES[body.split('_')[0]][0]/distance.km*RAD2DEG
@@ -597,7 +615,7 @@ class SkymapBinder:
                     if r<0.2: r = 0.2
                     if body in {'mercury','venus'}:
                         phase, dir, idx = user.skyfieldalmanac.planet_phase(body_eph,time_ti)
-                        txt += '\n%s: %.0f&deg; idx=%s %s' % (
+                        txt += '\n%s: %.0f&#176; idx=%s %s' % (
                             self.get_text('Phase angle'),
                             #SkymapBinder.venus_phase(time_ti).degrees
                             phase.degrees,
@@ -627,9 +645,9 @@ class SkymapBinder:
                 if radius:
                     dm, ds = divmod(radius*2.0*3600,60)
                     if dm>0:
-                        txt += '\n%s: %.0f&prime;%.1f&Prime;' % (self.get_text('Apparent size'),dm,ds)
+                        txt += '\n%s: %.0f&#8242;%.1f&#8243;' % (self.get_text('Apparent size'),dm,ds)
                     else:
-                        txt += '\n%s: %.1f&Prime;' % (self.get_text('Apparent size'),ds)
+                        txt += '\n%s: %.1f&#8243;' % (self.get_text('Apparent size'),ds)
                 # According to ISO 31 the thousand separator is a thin space
                 # independent of language.
                 unit = almanac_obj.formatter.get_label_string("km")
@@ -639,7 +657,7 @@ class SkymapBinder:
                     txt += '\n%s: %.2f' % (self.get_text('Magnitude'),magnitude)
                 if isinstance(body_eph,EarthSatellite):
                     point = wgs84.geographic_position_of(body_eph.at(time_ti))
-                    txt += '\n{:}: {:.4f}&deg; {:}, {:.4f}&deg; {:}, {:_.0f}{:}'.format(
+                    txt += '\n{:}: {:.4f}&#176; {:}, {:.4f}&#176; {:}, {:_.0f}{:}'.format(
                         self.get_text('Position'),
                         abs(point.latitude.degrees),
                         ordinates[0 if point.latitude.degrees>=0.0 else 8],
@@ -734,7 +752,7 @@ class SkymapBinder:
                 ))
             else:
                 s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
-                    lat_s.replace(' ','&numsp;'),
+                    lat_s.replace(' ','&#8199;'), # &numsp;
                     ordinates[0 if almanac_obj.lat>=0 else 8]))
                 s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
                     lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
@@ -762,12 +780,16 @@ class MoonSymbolBinder:
         self.colors = colors
         self.width = 50
         self.with_tilt = True
+        self.x = None
+        self.y = None
     
-    def __call__(self, width=None, with_tilt=None):
+    def __call__(self, width=None, with_tilt=None, x=None, y=None):
         if width:
             self.width = weeutil.weeutil.to_int(width)
         if with_tilt is not None:
-            self.with_tilt = with_tilt
+            self.with_tilt = weeutil.weeutil.to_bool(with_tilt)
+        if x is not None: self.x = str(x)
+        if y is not None: self.y = str(y)
         return self
     
     def __str__(self):
@@ -793,12 +815,14 @@ class MoonSymbolBinder:
         moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
         ptext = self.almanac_obj.moon_phases[moon_index]
         txt = self.labels.get('moon','moon').capitalize()
-        txt += '\n%s: %.0f&deg; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
+        txt += '\n%s: %.0f&#176; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         if alpha is not None:
-            txt += '\n%s: %.0f&deg;' % (self.labels.get('Tilt','Tilt'),alpha*180.0/numpy.pi)
-        return '%s%s%s%s%s' % (
-            SkymapAlmanacType.SVG_START % (self.width,self.width),
-            '<desc>the Moon, phase %.1f&deg;</desc>\n' % phase.degrees,
+            txt += '\n%s: %.0f&#176;' % (self.labels.get('Tilt','Tilt'),alpha*180.0/numpy.pi)
+        return '%s%s%s%s%s%s%s' % (
+            SkymapAlmanacType.SVG_START,
+            ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
+            SkymapAlmanacType.SVG_START_ATTR % (self.width,self.width),
+            '<desc>the Moon, phase %.1f&#176;</desc>\n' % phase.degrees,
             '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
             moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
             SkymapAlmanacType.SVG_END
@@ -814,10 +838,9 @@ class AnalemmaBinder:
   viewBox="%s %s %s %s"
   xmlns="http://www.w3.org/2000/svg">
 '''
-    SVG_END = '</svg>\n'
-    
+
     def __init__(self, config_dict, station_location, almanac_obj, labels):
-        self.credits = '&copy; ' + station_location
+        self.credits = '%s %s' % (labels['©'],station_location)
         self.location = station_location
         self.almanac_obj = almanac_obj
         self.labels = labels
@@ -910,7 +933,7 @@ class AnalemmaBinder:
         # SVG header
         s.append(AnalemmaBinder.SVG_START % (self.width,self.height,0,0,self.width,self.height))
         # SVG description (always in English, not presented to the user)
-        s.append('<desc>Analemma for %.4f&deg; %s, %08.4f&deg; %s for the year %s at %s</desc>\n' % (
+        s.append('<desc>Analemma for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s</desc>\n' % (
             abs(self.almanac_obj.lat),
             'N' if self.almanac_obj.lat>=0 else 'S',
             abs(self.almanac_obj.lon),
@@ -926,14 +949,14 @@ class AnalemmaBinder:
             y = (i-min_alt)*y_factor+y0
             if int(min_alt)<i<int(max_alt):
                 s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x0,y,x0+width,y,self.colors[1]))
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&deg;</text>\n' % (x0-3,y,self.colors[0],fontsize,i))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&#176;</text>\n' % (x0-3,y,self.colors[0],fontsize,i))
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
             x0-2.3*fontsize,y0-0.5*height,fontsize,x0-2.3*fontsize,y0-0.5*height,self.labels.get('Altitude','Altitude')))
         # x scale
         for i in range(int(min_az),int(max_az)+xscale,xscale):
             x = (i-min_az)*x_factor+x0
             s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&deg;</text>\n' % (
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&#176;</text>\n' % (
                 x,y0+fontsize*1.1,self.colors[0],fontsize,i%360))
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
             x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Azimuth','Azimuth')))
@@ -1032,9 +1055,9 @@ class AnalemmaBinder:
         # location
                 lat_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lon_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
-                lat_s = lat_vt.format("%.4f").replace(' ','&numsp;')
+                lat_s = lat_vt.format("%.4f").replace(' ','&#8199;') # &numsp;
                 lon_s = lon_vt.format("%08.4f")
-                txt = "%s, %s&thinsp;%s, %s&thinsp;%s" % (
+                txt = "%s, %s&#8201;%s, %s&#8201;%s" % (
                     txt,
                     lat_s,
                     formatter.ordinate_names[0 if self.almanac_obj.lat>=0 else 8],
@@ -1043,7 +1066,7 @@ class AnalemmaBinder:
                 )
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
             0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
-        s.append(AnalemmaBinder.SVG_END)
+        s.append(SkymapAlmanacType.SVG_END)
         return "".join(s)
 
 
@@ -1155,7 +1178,7 @@ class SkymapService(StdService):
         languages = set(languages)
         logdbg('languages used in this WeeWX instance: %s' % languages)
         for lang in languages:
-            conf = dict()
+            conf = {'©':'&#169;'}
             if lang=='en' or lang.startswith('en_'):
                 conf.update({
                     'Solar time':'Solar time',
@@ -1164,7 +1187,8 @@ class SkymapService(StdService):
                     'Data source':'Data source',
                     'Magnitude':'Magnitude',
                     'First point of Aries':'First point of Aries',
-                    'Apparent size':'Apparent size'
+                    'Apparent size':'Apparent size',
+                    'Tilt':'Tilt'
                 })
             if lang=='de' or lang.startswith('de_'):
                 conf.update({
@@ -1176,6 +1200,7 @@ class SkymapService(StdService):
                     'First point of Aries':'Frühlingspunkt',
                     'Apparent size':'Scheinbare Größe',
                     'In constellation':'Im Sternbild',
+                    'Tilt':'Neigung',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',

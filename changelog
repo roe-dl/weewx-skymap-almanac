@@ -2,3 +2,5 @@
 * initial version
 0.2
 * observe moon tilt for moon symbol
+* replace HTML entities by XML entities
+* support x and y attribute in SVG
