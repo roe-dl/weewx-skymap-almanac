@@ -817,7 +817,7 @@ class MoonSymbolBinder:
         txt = self.labels.get('moon','moon').capitalize()
         txt += '\n%s: %.0f&#176; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         if alpha is not None:
-            txt += '\n%s: %.0f&#176;' % (self.labels.get('Tilt','Tilt'),alpha*180.0/numpy.pi)
+            txt += '\n%s: %.0f&#176;' % (self.labels.get('Moon tilt','Tilt'),alpha*180.0/numpy.pi)
         return '%s%s%s%s%s%s%s' % (
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
@@ -1188,7 +1188,7 @@ class SkymapService(StdService):
                     'Magnitude':'Magnitude',
                     'First point of Aries':'First point of Aries',
                     'Apparent size':'Apparent size',
-                    'Tilt':'Tilt'
+                    'Moon tilt':'Tilt'
                 })
             if lang=='de' or lang.startswith('de_'):
                 conf.update({
@@ -1200,7 +1200,7 @@ class SkymapService(StdService):
                     'First point of Aries':'Frühlingspunkt',
                     'Apparent size':'Scheinbare Größe',
                     'In constellation':'Im Sternbild',
-                    'Tilt':'Neigung',
+                    'Moon tilt':'Neigung',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -1256,15 +1256,21 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size'}:
+                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets
-                    # Note: We need the planets' names in lowercase.
-                    for key in list(user.skyfieldalmanac.PLANETS)+['ceres']:
-                        if key.capitalize() in astro:
-                            conf[key] = astro[key.capitalize()]
-                            conf[key+'_barycenter'] = astro[key.capitalize()]
+                    alm = data.get('Almanac',dict())
+                    if 'planet_names' in alm:
+                        for key,idx in user.skyfieldalmanac.PLANETS_IDX.items():
+                            try:
+                                conf[key] = alm['planet_names'][idx]
+                            except LookupError:
+                                pass
+                    # Name of Sun and Moon
+                    for key in ('sun','moon'):
+                        if key in alm:
+                            conf[key] = alm[key]
             except (OSError,ValueError) as e:
                 logerr("languge '%s'; %s - %s" % (lang,e.__class__.__name__,e))
             logdbg('%s: %s' % (lang,conf))

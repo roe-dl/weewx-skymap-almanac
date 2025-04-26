@@ -162,6 +162,8 @@ following parameters defined to adjust the layout:
 * `credits`: Credits text in the lower right corner of the sky map. Default
   is the text of the option `location` in `weewx.conf` together with the
   copyright sign.
+* `x` and `y`: In case you want to include the sky map into another SVG
+  image, you can set position by the `x` and `y` parameters.
 
 ### Time
 
@@ -183,6 +185,9 @@ You can change the size of the symbol by setting the parameter `width` like
 `$almanac.moon_symbol(width=200)`.
 
 To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
+
+In case you want to include the moon symbol into another SVG image, you
+can set the position by using the paraemters `x` and `y`.
 
 ## Analemma
 
