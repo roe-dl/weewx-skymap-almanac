@@ -119,7 +119,9 @@ available if you have special requirements.
   between the stars. Optional. Default `True`. Uses the 
   `constellationship.fab` file of Stellarium.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
-  `['rgba(255,243,228,0.5)','#ffecd5']`
+  `['#bbb4ac19','#ffecd5']`. The first value is the color of the dark
+  side, the second color that of the sunlit side. For the dark side
+  an opacity value can be provided.
 * `analemma_colors`: Colors for `analemma`. Optional. Default
   `['currentColor','#808080','#7cb5ec','#f7a35c']`
 * `[[[Formats]]]`: Format options. Optional.

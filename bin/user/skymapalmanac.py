@@ -105,7 +105,8 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         if attr=='skymap':
             return SkymapBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='moon_symbol':
-            return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['rgba(255,243,228,0.5)','#ffecd5']))
+            # color was ['rgba(255,243,228,0.5)','#ffecd5']
+            return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['#bbb4ac19','#ffecd5']))
         if attr=='analemma':
             return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
@@ -1082,9 +1083,26 @@ def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
         alpha = numpy.pi if phase>180.0 else 0.0
     else:
         alpha = shape
+    # color
+    if full_moon:
+        # color of the sunlit moon
+        circle_color = col[1]
+        circle_opacity = 1
+    elif col[0][0]=='#' and len(col[0])>7:
+        # color of the dark side with opacity
+        circle_color = col[0][:7]
+        circle_opacity = round(int(col[0][7:],16)/255.0,2)
+    elif col[0].startswith('rgba(') and col[0].endswith(')'):
+        s = col[0][5:-1].split(',')
+        circle_color = '#%02X%02X%02X' % (int(s[0]),int(s[1]),int(s[2]))
+        circle_opacity = float(s[3])
+    else:
+        # color of the dark side
+        circle_color = col[0]
+        circle_opacity = 1
     s = []
     s.append('<g%s><title>%s</title>\n' % (id,txt))
-    s.append('<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col[1] if full_moon else col[0]))
+    s.append('<circle cx="%.4f" cy="%.4f" r="%s" fill="%s" opacity="%s" stroke="none" />\n' % (x,y,r,circle_color,circle_opacity))
     if not full_moon and not new_moon:
         xr = -r*numpy.sin(alpha)
         yr = r*numpy.cos(alpha)
