@@ -1,6 +1,6 @@
 0.1 07apr2025
 * initial version
-0.2
+0.2 05may2025
 * observe moon tilt for moon symbol
 * replace HTML entities by XML entities
 * support x and y attribute in SVG
