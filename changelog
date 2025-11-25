@@ -5,3 +5,5 @@
 * replace HTML entities by XML entities
 * support x and y attribute in SVG
 * localization issues
+0.3
+* if current working directory is not available

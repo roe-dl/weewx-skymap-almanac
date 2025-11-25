@@ -33,7 +33,7 @@
     Thin space                &#8201;
 """
 
-VERSION="0.2"
+VERSION="0.3"
 
 import time
 import os.path
@@ -47,7 +47,16 @@ import weeutil.weeutil
 import user.skyfieldalmanac
 
 import numpy
-from skyfield.api import N, S, E, W, wgs84, EarthSatellite, Star
+try:
+    from skyfield.api import N, S, E, W, Loader, wgs84, EarthSatellite, Star, Angle
+except (ImportError,PermissionError):
+    N = E = +1.0
+    S = W = -1.0
+    from skyfield.iokit import Loader
+    from skyfield.toposlib import wgs84
+    from skyfield.sgp4lib import EarthSatellite
+    from skyfield.starlib import Star
+    from skyfield.units import Angle
 from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 from skyfield.magnitudelib import planetary_magnitude
 from skyfield.positionlib import position_of_radec

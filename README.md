@@ -189,7 +189,7 @@ You can change the size of the symbol by setting the parameter `width` like
 To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 
 In case you want to include the moon symbol into another SVG image, you
-can set the position by using the paraemters `x` and `y`.
+can set the position by using the parameters `x` and `y`.
 
 ## Analemma
 
