@@ -295,6 +295,24 @@ The following IDs are defined:
 * Earth satellite ID: an Earth satellite
 * `HIP`+Hipparcos catalogue number: a single star on the map
 
+## How to check whether this extension is available?
+
+If you write a skin, you may want to know whether the user installed and
+enabled this extension or not. You can do so this way:
+
+```
+#import weewx.almanac
+## get a list of the names of the installed almanac extensions
+#set $almanac_names = [$alm.__class__.__name__ for $alm in $weewx.almanac.almanacs]
+## check if the Skymap almanac extension is available
+#set $skymap_almanac_available = 'SkymapAlmanacType' in $almanac_names and $almanac.hasExtras
+```
+
+Then you include and exclude code by using `#if $skymap_almanac_available`.
+
+Please note that `$varExists()` does not work with attributes that have one
+element level after `$almanac` only.
+
 ## Credits
 
 * [Tom Keffer et al. (WeeWX)](https://github.com/weewx/weewx)
