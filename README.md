@@ -13,6 +13,7 @@ Sky map for WeeWX
 * [Analemma](#analemma)
 * [Dark mode of your web site](#dark-mode-of-your-website)
 * [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javaScript)
+* [How to check whether this extension is available?](#how-to-check-whether-this-extension-is-available)
 * [Credits](#credits)
 * [Links](#links)
 

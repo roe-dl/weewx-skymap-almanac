@@ -5,6 +5,6 @@
 * replace HTML entities by XML entities
 * support x and y attribute in SVG
 * localization issues
-0.3
+0.3 04dec2025
 * if current working directory is not available
 * docu how to check for the availability of this extension
