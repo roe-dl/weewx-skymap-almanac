@@ -8,6 +8,7 @@ Sky map for WeeWX
 * [Prerequisites](#prerequisites)
 * [Installation instructions](#installation-instructions)
 * [Configuration instructions](#configuration-instructions)
+* [Styling]
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
@@ -140,6 +141,35 @@ available if you have special requirements.
 
 All the configuration options can also be used as parameters to the
 attributes described below.
+
+## Styling
+
+To set up fonts the web page should include a CSS file or the `<style>`
+tag in the `<head>` section. Often you will have a general font definition
+there, that applies to the texts of the images from this extension, too.
+
+CSS:
+
+```
+body {
+    font-family: sans-serif;
+    font-weight: normal;
+}
+```
+
+Style within the template:
+
+```HTML
+<style>
+    body {
+        font-family: sans-serif;
+        font-weight: normal;
+    }
+</style>
+```
+
+If you want to use another font for the sky map than generally on your
+page, replace `body` by `svg`.
 
 ## Sky map
 

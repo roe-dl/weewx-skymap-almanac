@@ -33,7 +33,7 @@
     Thin space                &#8201;
 """
 
-VERSION="0.3"
+VERSION="0.4"
 
 import time
 import os.path
@@ -1267,8 +1267,10 @@ class SkymapService(StdService):
                 })
             skin = os.path.join(skin_root,'Seasons','lang')
             try:
-                data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang))
+                data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0].split('_')[0]))
                 if data:
+                    if '_' in lang and os.path.isfile('%s.conf' % lang.split('.')[0]):
+                        data.update(configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0])))
                     # used for determining skin language
                     conf['hour'] = data.get('Units',dict()).get('Labels',dict()).get('hour')
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
