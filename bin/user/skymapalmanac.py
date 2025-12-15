@@ -175,6 +175,7 @@ class SkymapBinder:
         self.constellationship = config_dict.get('Constellationship',(None,None))
         self.x = None
         self.y = None
+        self.html_class = None
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -408,6 +409,7 @@ class SkymapBinder:
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (width,width),
+            ' class="%s"' % self.html_class if self.html_class else '',
             # SVG description (always in English, not presented to the user)
             '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s</desc>\n' % (
                 abs(self.almanac_obj.lat),
@@ -792,14 +794,16 @@ class MoonSymbolBinder:
         self.with_tilt = True
         self.x = None
         self.y = None
+        self.html_class = None
     
-    def __call__(self, width=None, with_tilt=None, x=None, y=None):
+    def __call__(self, width=None, with_tilt=None, x=None, y=None, html_class=None):
         if width:
             self.width = weeutil.weeutil.to_int(width)
         if with_tilt is not None:
             self.with_tilt = weeutil.weeutil.to_bool(with_tilt)
         if x is not None: self.x = str(x)
         if y is not None: self.y = str(y)
+        if html_class is not None: self.html_class = html_class
         return self
     
     def __str__(self):
@@ -828,10 +832,11 @@ class MoonSymbolBinder:
         txt += '\n%s: %.0f&#176; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         if alpha is not None:
             txt += '\n%s: %.0f&#176;' % (self.labels.get('Moon tilt','Tilt'),alpha*180.0/numpy.pi)
-        return '%s%s%s%s%s%s%s' % (
+        return '%s%s%s%s%s%s%s%s' % (
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (self.width,self.width),
+            ' class="%s"' % self.html_class if self.html_class else '',
             '<desc>the Moon, phase %.1f&#176;</desc>\n' % phase.degrees,
             '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
             moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
@@ -846,7 +851,7 @@ class AnalemmaBinder:
     SVG_START = '''<svg
   width="%s" height="%s" 
   viewBox="%s %s %s %s"
-  xmlns="http://www.w3.org/2000/svg">
+  xmlns="http://www.w3.org/2000/svg"%s>
 '''
 
     def __init__(self, config_dict, station_location, almanac_obj, labels):
@@ -860,6 +865,7 @@ class AnalemmaBinder:
         self.tz = "civil"
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
+        self.html_class = None
 
     def __call__(self, **kwargs):
         for key in kwargs:
@@ -941,7 +947,7 @@ class AnalemmaBinder:
         x_season = (az_season.degrees-min_az)*x_factor+x0
         s = []
         # SVG header
-        s.append(AnalemmaBinder.SVG_START % (self.width,self.height,0,0,self.width,self.height))
+        s.append(AnalemmaBinder.SVG_START % (self.width,self.height,0,0,self.width,self.height,'\n   class="%s"' % self.html_class if self.html_class else ''))
         # SVG description (always in English, not presented to the user)
         s.append('<desc>Analemma for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s</desc>\n' % (
             abs(self.almanac_obj.lat),

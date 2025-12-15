@@ -174,13 +174,15 @@ satellites you can remove that section and that key.
 
 ## Styling
 
+### General font setting
+
 To set up fonts the web page should include a CSS file or the `<style>`
 tag in the `<head>` section. Often you will have a general font definition
 there, that applies to the texts of the images from this extension, too.
 
 CSS:
 
-```
+```CSS
 body {
     font-family: sans-serif;
     font-weight: normal;
@@ -200,6 +202,24 @@ Style within the template:
 
 If you want to use another font for the sky map than generally on your
 page, replace `body` by `svg`.
+
+### Special settings
+
+All the tags of this extension can have a `html_class` parameter which
+adds an HTML class or a list of such classes to the image. You can use
+that class to set styling options within in CSS files or `<style>` 
+sections.
+
+For example, if you use the parameter `html_class="myskymap"` like in
+`$almanac.skymap(html_class="myskymap")`, then you could put into your CSS
+file:
+
+```CSS
+.myskymap {
+    font-family: sans-serif;
+    font-weight: normal;
+}
+```
 
 ## Sky map
 
@@ -227,6 +247,7 @@ following parameters defined to adjust the layout:
   copyright sign.
 * `x` and `y`: In case you want to include the sky map into another SVG
   image, you can set position by the `x` and `y` parameters.
+* `html_class`: set a HTML class for styling
 
 ### Time
 
@@ -252,6 +273,8 @@ To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 In case you want to include the moon symbol into another SVG image, you
 can set the position by using the parameters `x` and `y`.
 
+For styling you can set an HTML class using the `html_class` parameter.
+
 ## Analemma
 
 ### Usage
@@ -276,6 +299,7 @@ defined to adjust the layout:
     of time. Often an analemma is provided for 12:00:00 Local Mean Time.
   * `UTC`: UTC
   * `civil`: The local time as used by WeeWX. This is the default.
+* `html_class`: set a HTML class for styling
 
 This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
