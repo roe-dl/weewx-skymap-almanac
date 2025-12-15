@@ -8,7 +8,7 @@ Sky map for WeeWX
 * [Prerequisites](#prerequisites)
 * [Installation instructions](#installation-instructions)
 * [Configuration instructions](#configuration-instructions)
-* [Styling]
+* [Styling](#styling)
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
@@ -141,6 +141,36 @@ available if you have special requirements.
 
 All the configuration options can also be used as parameters to the
 attributes described below.
+
+Example `[Almanac]` configuration section in `weewx.conf`:
+
+```
+[Almanac]
+    [[Skyfield]]
+        enable = true
+        ephemeris = de440.bsp
+        use_builtin_timescale = false
+        timescale_url = https://datacenter.iers.org/products/eop/rapid/standard/finals2000A.all, ftps://gdc.cddis.eosdis.nasa.gov/products/iers/finals.all
+        "#log_ftp" = false
+        update_interval = 31557600
+        enable_live_data = true
+        disable_pyephem = false
+        [[[EarthSatellites]]]
+            stations.tle = https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle
+            gps.tle = https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle
+            weather.tle = https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle
+    [[Skymap]]
+        enable = true
+        earth_satellites = weather_40732, weather_38552, weather_28912, stations_25544, gps_24876, gps_26360, gps_26407, gps_27663, gps_28190, gps_28474, gps_28874, gps_29486, gps_29601, gps_32260, gps_32384, gps_32711, gps_35752, gps_36585
+        [[[Formats]]]
+            gps_* = 3, "#10A010", round
+            stations_61447 = 3, "#A010A0", round
+            weather_* = 1.5, "#00deff", square
+```
+
+Please especially adjust the `[[[EarthSatellites]]]` section and depending
+`earth_satellites` key to your needs. If you don't want to show Earth
+satellites you can remove that section and that key.
 
 ## Styling
 
