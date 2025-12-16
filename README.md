@@ -66,6 +66,11 @@ WeeWX from version 5.2 on and weewx-skyfield-almanac
 There is no need to configure anything, but there are some tuning options
 available if you have special requirements.
 
+> [!NOTE]
+> If you are new to this extension, please, do NOT change the configuration
+> at the beginning. The installation sets reasonable values to all 
+> configuration keys to immediately include the new tags into your skin.
+
 ```
 [Almanac]
     [[Skymap]]
