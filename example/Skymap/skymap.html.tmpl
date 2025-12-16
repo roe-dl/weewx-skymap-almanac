@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="$lang">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="style.css" rel="stylesheet" />
+    <title>WeeWX Skymap almanac extension example</title>
+    <meta name="description" content="an example how to use this extension" />
+  </head>
+  <body>
+    <h1>$gettext("WeeWX Skymap almanac extension example")</h1>
+    <h2>$gettext("Sky map")</h2>
+    $almanac.skymap
+    <h2>$pgettext("Astronomical","Moon")</h2>
+    $almanac.moon_symbol
+    <h2>$gettext("Analemma")</h2>
+    $almanac.analemma
+    <p>$gettext('See <a href="https://github.com/roe-dl/weewx-skymap-almanac" target="_blank">weewx-skymap-almananac extension at GitHub</a> for more details.')</p>
+  </body>
+</html>
