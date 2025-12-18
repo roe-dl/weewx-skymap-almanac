@@ -444,6 +444,7 @@ class SkymapBinder:
         # start clipping
         s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
         # altitude scale
+        s.append('<g id="altitude_scale">\n')
         s.append('<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180')
         for i in range(11):
             if i!=5:
@@ -474,6 +475,7 @@ class SkymapBinder:
                 y1,txt))
             # circle of right ascension
             s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
+        s.append('</g>\n')
         time1_ts = time.thread_time_ns()*0.000001
         # ecliptic
         if self.show_ecliptic:

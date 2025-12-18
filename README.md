@@ -347,7 +347,7 @@ To switch on the constellation lines the script looks like this:
 let el = document.getElementById('constellations');
 if (el)
   {
-    el.removeProperty("display");
+    el.style.removeProperty("display");
   }
 </script>
 ```
@@ -375,6 +375,7 @@ If you assign that script to a button, the user can easily find the star
 on the map by pressing the button.
 
 The following IDs are defined:
+* `altitude_scale`: altitude scale within the sky area
 * `circle_of_right_ascension`: circle of right ascension and border of the
   circumpolar area
 * `circle_of_ecliptic`: dotted line of the circle of the ecliptic

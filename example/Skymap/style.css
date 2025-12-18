@@ -2,3 +2,15 @@ body {
     font-family: sans-serif;
     font-weight: normal;
 }
+.skymapswitches {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    margin-left: -10px;
+    margin-right: -10px;
+    max-width: 800px;
+}
+.skymapswitches div {
+    text-align: left;
+    padding: 10px;
+}

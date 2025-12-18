@@ -11,3 +11,6 @@
 0.4
 * fix #2
 * add HTML class attribute
+* example skin
+* fix docu
+* id `altitude_scale`

@@ -7,13 +7,40 @@
     <meta name="description" content="an example how to use this extension" />
   </head>
   <body>
+
+    ## page heading
     <h1>$gettext("WeeWX Skymap almanac extension example")</h1>
+
+    ## Sky map
     <h2>$gettext("Sky map")</h2>
-    $almanac.skymap
+    <script type="text/javascript">
+    #include "skymap.js"
+    </script>
+    <div>
+    <p>$almanac.skymap</p>
+    <div class="skymapswitches">
+      #for $label,$id in [('Altitude scale','altitude_scale'),
+                          ('Right ascension scale','circle_of_right_ascension'),
+                          ('Ecliptic','circle_of_ecliptic'),
+                          ('Constellation lines','constellations')]
+      <div>
+      <label>
+        <input type="checkbox" onChange="set_display_in_svg('$id',event)" checked />
+        $gettext($label)
+      </label>
+      </div>
+    #end for
+    </div>
+    </div>
+
+    ## Moon symbol
     <h2>$pgettext("Astronomical","Moon")</h2>
     $almanac.moon_symbol
+
+    ## Analemma
     <h2>$gettext("Analemma")</h2>
     $almanac.analemma
     <p>$gettext('See <a href="https://github.com/roe-dl/weewx-skymap-almanac" target="_blank">weewx-skymap-almananac extension at GitHub</a> for more details.')</p>
+
   </body>
 </html>
