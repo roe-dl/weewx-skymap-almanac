@@ -31,4 +31,4 @@ using the following command:
 mkdir /etc/weewx/skins/Skymap
 ```
 
-![Skymap](../skymap-example.png)
+![Skymap](../../skymap-example.png)
