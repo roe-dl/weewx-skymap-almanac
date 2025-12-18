@@ -30,3 +30,5 @@ using the following command:
 ```shell
 mkdir /etc/weewx/skins/Skymap
 ```
+
+![Skymap](../skymap-example.png)
