@@ -13,7 +13,7 @@ Sky map for WeeWX
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Styling](#styling)
-  * [Dark mode of your web site](#dark-mode-of-your-website)
+  * [Dark mode of your web site](#dark-mode-of-your-web-site)
   * [General font setting](#general-font-setting)
   * [Special settings](#special-settings)
 * [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javaScript)
@@ -206,7 +206,8 @@ following parameters defined to adjust the layout:
   copyright sign.
 * `x` and `y`: In case you want to include the sky map into another SVG
   image, you can set position by the `x` and `y` parameters.
-* `html_class`: set a HTML class for styling
+* `html_class`: set an HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
 
 ### Time
 
@@ -232,7 +233,8 @@ To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 In case you want to include the moon symbol into another SVG image, you
 can set the position by using the parameters `x` and `y`.
 
-For styling you can set an HTML class using the `html_class` parameter.
+For styling you can set an HTML class using the `html_class` parameter
+and assign an ID using the `id` parameter.
 
 ## Analemma
 
@@ -258,7 +260,8 @@ defined to adjust the layout:
     of time. Often an analemma is provided for 12:00:00 Local Mean Time.
   * `UTC`: UTC
   * `civil`: The local time as used by WeeWX. This is the default.
-* `html_class`: set a HTML class for styling
+* `html_class`: set am HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
 
 This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
