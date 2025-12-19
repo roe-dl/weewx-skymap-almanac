@@ -12,7 +12,10 @@ Sky map for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
-* [Dark mode of your web site](#dark-mode-of-your-website)
+* [Styling](#styling)
+  * [Dark mode of your web site](#dark-mode-of-your-website)
+  * [General font setting](#general-font-setting)
+  * [Special settings](#special-settings)
 * [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javaScript)
 * [How to check whether this extension is available?](#how-to-check-whether-this-extension-is-available)
 * [Credits](#credits)
@@ -177,55 +180,6 @@ Please especially adjust the `[[[EarthSatellites]]]` section and depending
 `earth_satellites` key to your needs. If you don't want to show Earth
 satellites you can remove that section and that key.
 
-## Styling
-
-### General font setting
-
-To set up fonts the web page should include a CSS file or the `<style>`
-tag in the `<head>` section. Often you will have a general font definition
-there, that applies to the texts of the images from this extension, too.
-
-CSS:
-
-```CSS
-body {
-    font-family: sans-serif;
-    font-weight: normal;
-}
-```
-
-Style within the template:
-
-```HTML
-<style>
-    body {
-        font-family: sans-serif;
-        font-weight: normal;
-    }
-</style>
-```
-
-If you want to use another font for the sky map than generally on your
-page, replace `body` by `svg`.
-
-### Special settings
-
-All the tags of this extension can have a `html_class` parameter which
-adds an HTML class or a list of such classes to the image. You can use
-that class to set styling options within in CSS files or `<style>` 
-sections.
-
-For example, if you use the parameter `html_class="myskymap"` like in
-`$almanac.skymap(html_class="myskymap")`, then you could put into your CSS
-file:
-
-```CSS
-.myskymap {
-    font-family: sans-serif;
-    font-weight: normal;
-}
-```
-
 ## Sky map
 
 ### Usage
@@ -311,7 +265,9 @@ time:
 
 ![analemma](analemma.png)
 
-## Dark mode of your web site
+## Styling
+
+### Dark mode of your web site
 
 If you insert the tags into your web page template as described above dark
 mode is observed properly. The background and the text around the map and in
@@ -325,6 +281,55 @@ But if you save the images created by the tags to separate files and
 include them using the `<img>` tag (what we do NOT recommend), then you will 
 have to set up colors appropriately by the `colors` parameter or
 configuration option.
+
+### General font setting
+
+To set up fonts the web page should include a CSS file or the `<style>`
+tag in the `<head>` section. Often you will have a general font definition
+there, that applies to the texts of the images from this extension, too.
+So in most cases you have nothing to do to set up the font used, but
+if not, you can use the following declarations:
+
+CSS:
+
+```CSS
+body {
+    font-family: sans-serif;
+    font-weight: normal;
+}
+```
+
+Style within the template:
+
+```HTML
+<style>
+    body {
+        font-family: sans-serif;
+        font-weight: normal;
+    }
+</style>
+```
+
+If you want to use another font for the sky map than generally on your
+page, replace `body` by `svg`.
+
+### Special settings
+
+All the tags of this extension can have a `html_class` parameter which
+adds an HTML class or a list of such classes to the image. You can use
+that class to set styling options within in CSS files or `<style>` 
+sections.
+
+For example, if you use the parameter `html_class="myskymap"` like in
+`$almanac.skymap(html_class="myskymap")`, then you could put into your CSS
+file:
+
+```CSS
+.myskymap {
+    font-family: sans-serif;
+    font-weight: normal;
+}
+```
 
 ## Changing visibility of elements by JavaScript
 
