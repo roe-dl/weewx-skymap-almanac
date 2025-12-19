@@ -872,7 +872,7 @@ class AnalemmaBinder:
     def __call__(self, **kwargs):
         for key in kwargs:
             if key in {'width','height'}:
-                self.width = weeutil.weeutil.to_int(kwargs[key])
+                setattr(self,key,weeutil.weeutil.to_int(kwargs[key]))
             elif key in {'show_timestamp','show_location'}:
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
             else:
