@@ -8,7 +8,6 @@ Sky map for WeeWX
 * [Prerequisites](#prerequisites)
 * [Installation instructions](#installation-instructions)
 * [Configuration instructions](#configuration-instructions)
-* [Styling](#styling)
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
@@ -195,9 +194,12 @@ on the map is not according to scale.
 You can change the size of the map or other properties by setting parameters
 like `$almanac.skymap(width=1200)`. All the options that are defined for the 
 configuration file can also be used as parameters. Additionally there are the 
-following parameters defined to adjust the layout:
+following parameters defined to adjust the layout. All of them are optional:
 
 * `width`: Width and height of the map. Default 800.
+* `fromoutside`: If set to `True` show the celestial sphere from the outside.
+  Default is to show it from the inside as you see it if you lay on the
+  ground, legs to the south.
 * `location`: Location as text (for example the city name). Appears in the
   lower left corner of the sky map if provided instead of pure geographic
   coordinates. An empty string switches it off.
@@ -208,6 +210,16 @@ following parameters defined to adjust the layout:
   image, you can set position by the `x` and `y` parameters.
 * `html_class`: set an HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
+* `horizon`: list of altitude values in degrees that represent the visibile 
+  horizon, from north to east to south to west and back to north,
+  in equidistant azimuth steps.
+  If you look for a location within the European Union, you can get a
+  rough estimate of the horizon for free from the European Commission at
+  [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/).
+* `night_color`: background color at night, tuple of RGB values
+* `day_color`: background color at light day, tuple of RGB values
+* `horizon_night_color`: horizon area color at night, tuple of RGB values
+* `horizon_day_color`: horizon area at light day, tuple of RGB values
 
 ### Time
 

@@ -164,6 +164,8 @@ class SkymapBinder:
         self.formats = config_dict['Formats']
         self.night_color = (0,0,64) # #000040
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
+        self.horizon_night_color = (40,40,40)
+        self.horizon_day_color = (46,66,52)
         self.inout = -1.0
         self.width = 800
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
@@ -177,6 +179,7 @@ class SkymapBinder:
         self.y = None
         self.html_class = None
         self.id = None
+        self.horizon = None
     
     def __call__(self, **kwargs):
         """ optional parameters
@@ -199,6 +202,15 @@ class SkymapBinder:
                 self.bodies = list(kwargs[key])
             elif key in {'max_magnitude','star_tooltip_max_magnitude'}:
                 setattr(self,key,weeutil.weeutil.to_float(kwargs[key]))
+            elif key=='horizon':
+                horizon = kwargs[key]
+                if horizon:
+                    self.horizon = (
+                        numpy.clip(numpy.array(horizon),0.2,90.0),
+                        numpy.linspace(0.0,2.0*numpy.pi,len(horizon),endpoint=False)
+                    )
+                else:
+                    self.horizon = None
             else:
                 setattr(self,key,kwargs[key])
         return self
@@ -387,6 +399,40 @@ class SkymapBinder:
         # return the angle between the direction to the Sun and the direction
         # to where the Earth will be
         return s.separation_from(e)
+    
+    def get_horizon(self, area, color='#DDD', id='horizon'):
+        """ clip path or area between visible horizon and alt==0
+        
+            Args:
+                area(bool): True=area False=clip path
+                color(str): color of horizon area
+            
+            Returns:
+                str: path
+        """
+        if self.horizon:
+            # show horizon
+            s = ['<path ']
+            if area:
+                s.append('id="%s" ' % id)
+                s.append('stroke="%s" fill="%s" ' % ('none',color))
+            s.append('d="')
+            xx,yy = self.to_xy(self.horizon[0],self.horizon[1])
+            c = 'M'
+            for x,y in zip(xx,yy):
+                s.append('%s%.4f,%.4f' % (c,x,y))
+                c = 'L'
+            if area:
+                s.append('L%.4f,%.4f' % (xx[0],yy[0]))
+                s.append('L0,-89.8A89.8,89.8 0 0 1 0,89.8A89.8,89.8 0 0 1 0,-89.8')
+            s.append('z" />')
+            return ''.join(s)
+        else:
+            # no horizon defined, use 0°
+            if area:
+                return ''
+            else:
+                return '<circle cx="0" cy="0" r="89.8" />'
 
     def get_text(self, text):
         """ get localized text """
@@ -421,6 +467,7 @@ class SkymapBinder:
                 time.strftime("%Y-%m-%dT%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
             ),
             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
+            #'<defs><clipPath id="weewxskymapbackgroundclippath">%s</clipPath></defs>\n' % self.get_horizon(False)
             '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
         ]
         # background
@@ -430,18 +477,22 @@ class SkymapBinder:
             background_color = self.day_color
             moon_background_color = '#cfcfe6'
             constellation_line_color = '#B0B000'
+            horizon_color = self.horizon_day_color
         elif alt.degrees<(-18):
             # dark night (sun below 18 degrees below the horizon)
             background_color = self.night_color
             moon_background_color = '#2a2927'
             constellation_line_color = '#909000'
+            horizon_color = self.horizon_night_color
         else:
             # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
             dawn = 3.0-abs(alt.degrees)/6.0
             background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
             moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
             constellation_line_color = '#A0A000'
+            horizon_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.horizon_night_color,self.horizon_day_color)])
         background_color = "#%02X%02X%02X" % background_color
+        horizon_color = "#%02X%02X%02X" % horizon_color
         s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
         # start clipping
         s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
@@ -702,6 +753,8 @@ class SkymapBinder:
                 if dot[9] and len(dot[9])<=2:
                     s.append('<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9]))
                 s.append('</g>\n')
+        # horizon
+        s.append(self.get_horizon(True,horizon_color))
         time5_ts = time.thread_time_ns()*0.000001
         # end clipping
         s.append('</g>\n')
