@@ -222,10 +222,8 @@ following parameters defined to adjust the layout. All of them are optional:
   in equidistant azimuth steps.
   If you look for a location within the European Union, you can get a
   rough estimate of the horizon for free from the European Commission at
-  [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/).
-
-  ![sky map Rittersgrün](rittersgruen.svg)
-  
+  [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/).<br />
+  ![sky map Rittersgrün](rittersgruen.svg)<br />
   This example map shows the sky over the
   [railway station of Rittersgrün](https://97233.test-my-website.de/test/index.php)
   (which is a museum about Saxon railway history now) with the visible
