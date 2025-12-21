@@ -15,7 +15,7 @@ Sky map for WeeWX
   * [Dark mode of your web site](#dark-mode-of-your-web-site)
   * [General font setting](#general-font-setting)
   * [Special settings](#special-settings)
-* [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javaScript)
+* [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javascript)
 * [How to check whether this extension is available?](#how-to-check-whether-this-extension-is-available)
 * [Credits](#credits)
 * [Links](#links)
@@ -216,6 +216,14 @@ following parameters defined to adjust the layout. All of them are optional:
   If you look for a location within the European Union, you can get a
   rough estimate of the horizon for free from the European Commission at
   [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/).
+
+  ![sky map Rittersgrün](rittersgruen.svg)
+  
+  This example map shows the sky over the
+  [railway station of Rittersgrün](https://97233.test-my-website.de/test/index.php)
+  (which is a museum about Saxon railway history now) with the visible
+  horizon in that narrow mountain valley. You see that the sun disappears
+  behind the mountains there shortly after noon at this time of year.
 * `night_color`: background color at night, tuple of RGB values
 * `day_color`: background color at light day, tuple of RGB values
 * `horizon_night_color`: horizon area color at night, tuple of RGB values
