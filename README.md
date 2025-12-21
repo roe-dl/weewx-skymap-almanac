@@ -127,6 +127,10 @@ available if you have special requirements.
 * `show_constellations`: Flag whether to show the constellation lines
   between the stars. Optional. Default `True`. Uses the 
   `constellationship.fab` file of Stellarium.
+* `show_path_of_sun`: Flag whether to show the path of the Sun during
+  the day. Optional. Default `False`.
+* `show_path_of_moon`: Flag whether to show the path of the Moon during
+  the day. Optional. Default `False`.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
   `['#bbb4ac19','#ffecd5']`. The first value is the color of the dark
   side, the second color that of the sunlit side. For the dark side
@@ -196,7 +200,10 @@ like `$almanac.skymap(width=1200)`. All the options that are defined for the
 configuration file can also be used as parameters. Additionally there are the 
 following parameters defined to adjust the layout. All of them are optional:
 
-* `width`: Width and height of the map. Default 800.
+* `width`: Width and height of the map. Default 800. Possible values are
+  numbers with or without percent sign or `auto`.
+* `max_width`: Maximum width and height of the map. Default not specified.
+  Use it together with `width='auto'`.
 * `fromoutside`: If set to `True` show the celestial sphere from the outside.
   Default is to show it from the inside as you see it if you lay on the
   ground, legs to the south.
@@ -246,7 +253,9 @@ The sky map image contains different timestamps:
 Add `$almanac.moon_symbol` to your skin.
 
 You can change the size of the symbol by setting the parameter `width` like
-`$almanac.moon_symbol(width=200)`.
+`$almanac.moon_symbol(width=200)`. You can also set a maximum size by
+setting the parameter `max_width` like 
+`$almanac.moon_symbol(width='auto',max_width=200)`.
 
 To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 

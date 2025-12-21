@@ -89,6 +89,10 @@ def _get_config(config_dict):
     alm_conf_dict['Formats'] = conf_dict.get('Formats',configobj.ConfigObj())
     return alm_conf_dict
 
+def to_bool(x, valid_strings=()):
+    if x in valid_strings: return x
+    return weeutil.weeutil.to_bool(x)
+
 
 class SkymapAlmanacType(weewx.almanac.AlmanacType):
 
@@ -96,7 +100,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
     SVG_START_ATTR ='''
   width="%s" height="%s" 
   viewBox="-100 -100 200 200"
-  xmlns="http://www.w3.org/2000/svg"%s%s>
+  xmlns="http://www.w3.org/2000/svg"%s%s%s>
 '''
     SVG_END = '</svg>\n'
 
@@ -156,18 +160,21 @@ class SkymapBinder:
         self.log_failure = config_dict['log_failure']
         self.bodies = config_dict.get('bodies',user.skyfieldalmanac.planets_list+[user.skyfieldalmanac.SUN,user.skyfieldalmanac.EARTHMOON])
         self.earthsatellites = config_dict.get('earth_satellites',[])
-        self.show_stars = weeutil.weeutil.to_bool(config_dict.get('show_stars',True))
-        self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
-        self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
-        self.show_ecliptic = weeutil.weeutil.to_bool(config_dict.get('show_ecliptic',True))
-        self.show_constellations = weeutil.weeutil.to_bool(config_dict.get('show_constellations',True))
+        self.show_stars = to_bool(config_dict.get('show_stars',True))
+        self.show_timestamp = to_bool(config_dict.get('show_timestamp',True))
+        self.show_location = to_bool(config_dict.get('show_location',True))
+        self.show_ecliptic = to_bool(config_dict.get('show_ecliptic',True))
+        self.show_constellations = to_bool(config_dict.get('show_constellations',True))
+        self.show_path_of_sun = to_bool(config_dict.get('show_path_of_sun',False))
+        self.show_path_of_moon = to_bool(config_dict.get('show_path_of_moon',False))
         self.formats = config_dict['Formats']
         self.night_color = (0,0,64) # #000040
         self.day_color = (192,192,240) # #C0C0F0 # "#AdAdff"
         self.horizon_night_color = (40,40,40)
-        self.horizon_day_color = (46,66,52)
+        self.horizon_day_color = (79,113,89)
         self.inout = -1.0
         self.width = 800
+        self.max_width = None
         self.max_magnitude = weeutil.weeutil.to_float(config_dict.get('max_magnitude',6.0))
         self.star_tooltip_max_magnitude = weeutil.weeutil.to_float(config_dict.get('star_tooltip_max_magnitude',2.5))
         if 'venus_phases' not in almanac_obj.__dict__:
@@ -192,10 +199,13 @@ class SkymapBinder:
                 fromoutside(bool): reverse east-west
         """
         for key in kwargs:
-            if key=='width':
-                self.width = weeutil.weeutil.to_int(kwargs[key])
-            elif key in {'show_stars','show_timestamp','show_location','show_ecliptic'}:
-                setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
+            if key in {'width','max_width'}:
+                width = kwargs[key]
+                if width and width!='auto' and width[-1]!='%':
+                    width = weeutil.weeutil.to_int(width)
+                setattr(self,key,width)
+            elif key in {'show_stars','show_timestamp','show_location','show_ecliptic','show_path_of_sun','show_path_of_moon'}:
+                setattr(self,key,to_bool(kwargs[key],('hide',)))
             elif key=='fromoutside':
                 self.inout = 1.0 if kwargs[key] else -1.0
             elif key=='bodies':
@@ -375,6 +385,26 @@ class SkymapBinder:
         logdbg("ecliptic elapsed CPU time %.3fms %.3fms %.3fms %.3fms" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
         s.append('</g>\n')
         return ''.join(s)
+    
+    def path_of_body(self, observer, almanac_obj, time_ti, body, color='#FFFFFF', hide=False):
+        """ path of the body at the day of time_ti """
+        alt, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[body]).apparent().altaz()
+        if alt.degrees<0.0: return ''
+        hours = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i*0.01-0.5 for i in range(100)])
+        alts, azs, _ = observer.at(hours).observe(user.skyfieldalmanac.ephemerides[body]).apparent().altaz()
+        if numpy.max(alts.degrees)<=0: return ''
+        altsdegrees = alts.degrees
+        if altsdegrees[0]>=0: return ''
+        xx, yy = self.to_xy(altsdegrees,azs.radians)
+        s = ['<path id="path_of_%s" stroke="%s" stroke-width="1" opacity="0.5" fill="none" ' % (body,color)]
+        if hide: s.append('style="display:none" ')
+        s.append('d="')
+        c = 'M'
+        for x,y in zip(xx,yy):
+            s.append('%s%.4f,%.4f' % (c,x,y))
+            c = 'L'
+        s.append('" />\n')
+        return ''.join(s)
 
     @staticmethod
     def venus_phase(t):
@@ -456,8 +486,9 @@ class SkymapBinder:
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (width,width,
-            ' class="%s"' % self.html_class if self.html_class else '',
-            ' id="%s"' % self.id if self.id else ''),
+            '\n  class="%s"' % self.html_class if self.html_class else '',
+            '\n  id="%s"' % self.id if self.id else '',
+            '\n  style="max-width:%s;max-height:%s;"' % (self.max_width,self.max_width) if self.max_width else ''),
             # SVG description (always in English, not presented to the user)
             '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s</desc>\n' % (
                 abs(self.almanac_obj.lat),
@@ -496,6 +527,12 @@ class SkymapBinder:
         s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
         # start clipping
         s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
+        # path of Sun
+        if self.show_path_of_sun:
+            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.SUN, color='#FFFFFF', hide=self.show_path_of_sun=='hide'))
+        # path of Moon
+        if self.show_path_of_moon:
+            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.EARTHMOON, color='#cfcfe6', hide=self.show_path_of_moon=='hide'))
         # altitude scale
         s.append('<g id="altitude_scale">\n')
         s.append('<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180')
@@ -848,15 +885,21 @@ class MoonSymbolBinder:
         self.labels = labels
         self.colors = colors
         self.width = 50
+        self.max_width = None
         self.with_tilt = True
         self.x = None
         self.y = None
         self.html_class = None
         self.id = None
     
-    def __call__(self, width=None, with_tilt=None, x=None, y=None, html_class=None, id=None):
+    def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None):
         if width:
-            self.width = weeutil.weeutil.to_int(width)
+            if width!='auto'and width[-1]!='%':
+                self.width = weeutil.weeutil.to_int(width)
+            else:
+                self.width = width
+        if max_width:
+            self.max_width = weeutil.weeutil.to_int(max_width)
         if with_tilt is not None:
             self.with_tilt = weeutil.weeutil.to_bool(with_tilt)
         if x is not None: self.x = str(x)
@@ -895,8 +938,9 @@ class MoonSymbolBinder:
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (self.width,self.width,
-            ' class="%s"' % self.html_class if self.html_class else '',
-            ' id="%s"' % self.id if self.id else ''),
+            '\n  class="%s"' % self.html_class if self.html_class else '',
+            '\n  id="%s"' % self.id if self.id else '',
+            '\n  style="max-width:%s;max-height:%s"' % (self.max_width,self.max_width) if self.max_width else ''),
             '<desc>the Moon, phase %.1f&#176;</desc>\n' % phase.degrees,
             '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
             moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
