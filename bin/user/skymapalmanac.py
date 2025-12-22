@@ -201,7 +201,7 @@ class SkymapBinder:
         for key in kwargs:
             if key in {'width','max_width'}:
                 width = kwargs[key]
-                if width and width!='auto' and width[-1]!='%':
+                if width and width!='auto' and isinstance(width,str) and width[-1]!='%':
                     width = weeutil.weeutil.to_int(width)
                 setattr(self,key,width)
             elif key in {'show_stars','show_timestamp','show_location','show_ecliptic','show_path_of_sun','show_path_of_moon'}:
@@ -894,7 +894,7 @@ class MoonSymbolBinder:
     
     def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None):
         if width:
-            if width!='auto'and width[-1]!='%':
+            if width!='auto'and isinstance(width,str) and width[-1]!='%':
                 self.width = weeutil.weeutil.to_int(width)
             else:
                 self.width = width
@@ -1380,6 +1380,25 @@ class SkymapService(StdService):
                     'neptune':'Neptunus',
                     'neptune_barycenter':'Neptunus'
                 })
+            if lang=='fr' or lang.startswith('fr_'):
+                conf.update({
+                    'Solar time':'Temps solaire',
+                    'Sidereal time':'Temps sideral',
+                    'Distance':'Distance',
+                    'Data source':'Source des données',
+                    'Magnitude':'Magnitude',
+                    'First point of Aries':'Point Vernal',
+                    'Apparent size':'Taille apparente',
+                    'Moon tilt':'Inclinaison',
+                    'In constellation': 'Dans la constellation',
+                    # planet names that are different from English
+                    'mercury': 'Mercure',
+                    'mercury_barycenter': 'Mercure',
+                    'neptune': 'Neptune',
+                    'neptune_barycenter': 'Neptune',
+                    'saturn': 'Saturne',
+                    'saturn_barycenter': 'Saturne'
+            })
             skin = os.path.join(skin_root,'Seasons','lang')
             try:
                 data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0].split('_')[0]))
