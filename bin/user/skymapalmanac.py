@@ -1419,7 +1419,7 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt'}:
+                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt','Distance','In constellation'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets
