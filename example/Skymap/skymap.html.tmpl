@@ -16,30 +16,44 @@
     <script type="text/javascript">
     #include "skymap.js"
     </script>
-    <div>
-    <p>$almanac.skymap</p>
-    <div class="skymapswitches">
-      #for $label,$id in [('Altitude scale','altitude_scale'),
-                          ('Right ascension scale','circle_of_right_ascension'),
-                          ('Ecliptic','circle_of_ecliptic'),
-                          ('Constellation lines','constellations')]
-      <div>
-      <label>
-        <input type="checkbox" onChange="set_display_in_svg('$id',event)" checked />
-        $gettext($label)
-      </label>
+    <div class="row">
+      ## column of sky map
+      <div class="col1">
+
+        <p>
+          $almanac.skymap(width="100%",max_width="800")
+        </p>
+        <div class="skymapswitches">
+          #for $label,$id in [('Altitude scale','altitude_scale'),
+                              ('Right ascension scale','circle_of_right_ascension'),
+                              ('Ecliptic','circle_of_ecliptic'),
+                              ('Constellation lines','constellations')]
+          <div>
+          <label>
+            <input type="checkbox" onChange="set_display_in_svg('$id',event)" checked />
+            $gettext($label)
+          </label>
+          </div>
+          #end for
+        </div>
+    
       </div>
-    #end for
-    </div>
+
+      ## column of table of hevanly bodies
+      <div class="col2">
+      #include "heavenlybodiestable.inc"
+      </div>
+
     </div>
 
     ## Moon symbol
-    <h2>$pgettext("Astronomical","Moon")</h2>
+    <h2>$almanac.moon.name</h2>
     $almanac.moon_symbol
 
     ## Analemma
     <h2>$gettext("Analemma")</h2>
     $almanac.analemma
+
     <p>$gettext("See weewx-skymap-almanac extension at GitHub for more details.")</p>
 
   </body>

@@ -24,6 +24,10 @@ Sky map for WeeWX
 
 WeeWX from version 5.2 on and weewx-skyfield-almanac
 
+> [!NOTE]
+> You have to install weewx-skyfield-almanac first before installing this
+> extension.
+
 ## Installation instructions
 
 1) download
