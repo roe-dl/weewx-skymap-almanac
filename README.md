@@ -1,7 +1,7 @@
 # weewx-skymap-almanac
 Sky map for WeeWX
 
-![sky map](skymap.png)
+![sky map](Seasons-example.png)
 
 ## Contents
 
