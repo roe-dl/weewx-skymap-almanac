@@ -987,6 +987,7 @@ class AnalemmaBinder:
             return self.analemma()
         except Exception as e:
             logerr("analemma %s %s" % (e.__class__.__name__,e))
+            weeutil.logger.log_traceback(log.error, "analemma ****  ")
             return ""
     
     def analemma(self):
@@ -1012,11 +1013,16 @@ class AnalemmaBinder:
         observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
         # Sun's positions
         alts, azs, _ = observer.at(days).observe(body).apparent().altaz()
+        azs = azs.degrees
+        # around midnight
+        midnight = numpy.ediff1d(azs)
+        midnight = min(midnight)<-180.0 or max(midnight)>180.0
+        if midnight: azs = numpy.where(azs>180.0,azs-360.0,azs)
         # Min and max
         min_alt = numpy.floor(numpy.min(alts.degrees)-3)
         max_alt = numpy.ceil(numpy.max(alts.degrees)+3)
-        min_az = numpy.floor(numpy.min(azs.degrees)-1)
-        max_az = numpy.ceil(numpy.max(azs.degrees)+1)
+        min_az = numpy.floor(numpy.min(azs)-1)
+        max_az = numpy.ceil(numpy.max(azs)+1)
         # Scale
         if abs(max_alt-min_alt)>=40:
             yscale = 10
@@ -1033,6 +1039,8 @@ class AnalemmaBinder:
             xscale = 5
         elif xscale<12:
             xscale = 10
+        else:
+            xscale = int(xscale)
         min_az = numpy.floor(min_az/xscale)*xscale
         max_az = numpy.ceil(max_az/xscale)*xscale
         logdbg("analemma min_alt=%s max_alt=%s min_az=%s max_az=%s" % (min_alt,max_alt,min_az,max_az))
@@ -1040,6 +1048,8 @@ class AnalemmaBinder:
         t_season, k_season = skyfield.almanac.find_discrete(t0,t1,skyfield.almanac.seasons(user.skyfieldalmanac.sun_and_planets))
         t = user.skyfieldalmanac.ts.ut1_jd(numpy.round(t_season.ut1-time_ti.ut1,0)+time_ti.ut1)
         alt_season, az_season, _ = observer.at(t).observe(body).apparent().altaz()
+        az_season = az_season.degrees
+        if midnight: az_season = numpy.where(az_season>180.0,az_season-360.0,az_season)
         logdbg("analemma seasons %s" % t_season)
         logdbg("analemma seasons alt %s" % alt_season)
         logdbg("analemma seasons az %s" % az_season)
@@ -1047,9 +1057,9 @@ class AnalemmaBinder:
         x_factor = width/(max_az-min_az)
         y_factor = height/(min_alt-max_alt)
         ys = (alts.degrees-min_alt)*y_factor+y0
-        xs = (azs.degrees-min_az)*x_factor+x0
+        xs = (azs-min_az)*x_factor+x0
         y_season = (alt_season.degrees-min_alt)*y_factor+y0
-        x_season = (az_season.degrees-min_az)*x_factor+x0
+        x_season = (az_season-min_az)*x_factor+x0
         s = []
         # SVG header
         s.append(AnalemmaBinder.SVG_START % (

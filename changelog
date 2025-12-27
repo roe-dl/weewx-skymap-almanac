@@ -19,3 +19,4 @@
 * path of Sun and Moon on sky
 * attribute `max_width`
 * french localization thanks to user Jterrettaz
+* fix analemma midnight bug #5
