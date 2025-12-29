@@ -3,6 +3,12 @@
 ## See LICENSE.txt for your rights
 #errorCatcher Echo
 #encoding UTF-8
+#import weewx.almanac
+## get a list of the names of the installed almanac extensions
+#set $almanac_names = [$alm.__class__.__name__ for $alm in $weewx.almanac.almanacs]
+## check if the Skyfield and Skymap almanac extension are available
+#set global $skyfield_almanac_available = 'SkyfieldAlmanacType' in $almanac_names and $almanac.hasExtras
+#set global $skymap_almanac_available = 'SkymapAlmanacType' in $almanac_names and $almanac.hasExtras
 
 ## If extended almanac information is available, do extra calculations.
 #if $almanac.hasExtras
@@ -96,7 +102,7 @@
               <td class="data">$almanac.next_equinox</td>
             </tr>
           #end if
-          #if $varExists("$almanac.next_perihelion") and $varExists("$almanac.next_aphelion")
+          #if $skyfield_almanac_available and $varExists("$almanac.next_perihelion") and $varExists("$almanac.next_aphelion")
           #if $almanac.next_aphelion.raw<$almanac.next_perihelion.raw
           <tr>
             <td class="label">$gettext("Aphelion")</td>
@@ -126,7 +132,13 @@
       <div class="celestial_body">
         <table class="celestial">
           <tr>
-            <th class="label">$almanac.moon_symbol(width=100)</th>
+            <th class="label">
+              #if $skymap_almanac_available
+              $almanac.moon_symbol(width=100)
+              #else
+              <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="100" height="100" viewBox="-50 -50 100 100"><g stroke-width="3"><path stroke="#da4935" fill="#da4935" d="M 0,-24 a 26,26 0 0 1 -22,39 a 24,24 0 1 0 22,-39 z" /></g></svg>
+              #end if
+            </th>
             <th class="data" style="text-align:left">$gettext("Moon")</th>
           </tr>
           <tr><td class="label">&nbsp;</td><td class="data">&nbsp;</td></tr>
@@ -178,7 +190,7 @@
               <td class="data">$almanac.next_full_moon</td>
             </tr>
           #end if
-          #if $varExists("$almanac.next_perigee_moon") and $varExists("$almanac.next_apogee_moon")
+          #if $skyfield_almanac_available and $varExists("$almanac.next_perigee_moon") and $varExists("$almanac.next_apogee_moon")
           #if $almanac.next_perigee_moon.raw<$almanac.next_apogee_moon.raw
           <tr>
             <td class="label">$gettext("Perigee")</td>
@@ -206,11 +218,13 @@
           </tr>
         </table>
       </div>
+      #if $skymap_almanac_available
       <div class="celestial_body">
         <div style="margin-left:10px;margin-right:10px">
           $almanac.skymap(width=700)
         </div>
       </div>
+      #end if
     </div>
   #else
     <p>Install <a href="https://pypi.org/project/ephem/"><em>ephem</em></a> for detailed celestial timings.</p>
