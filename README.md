@@ -11,6 +11,7 @@ Sky map for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
+* [Equation of time](#equation-of-time)
 * [Styling](#styling)
   * [Dark mode of your web site](#dark-mode-of-your-web-site)
   * [General font setting](#general-font-setting)
@@ -298,6 +299,34 @@ This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
 
 ![analemma](analemma.png)
+
+## Equation of Time
+
+The equation of time describes the difference between the apparent
+solar time and the local mean time. 
+
+### Usage
+
+`$almanac.equation_of_time` or with parameters
+`$almanac.equation_of_time(...)`
+
+### Parameters
+
+* `width`: Width of the diagram
+* `height`: Height of the diagram
+* `noon`: If `True` calculate the diagram for high noon local mean time.
+  Optional. This the default. If set to `False` the actual time is used
+  that `$almanac` is bound to. The diagram looks the same, but the y
+  scaling differs.
+* `show_today`: If `True` mark the actual day (the day `$almanac` is bound
+  to). Optional. This is the default
+* `show_lmt`: If `True` mark the average of the solar time. Optional.
+  This is the default
+* `y_axis`: The y axis can be labeled with the solar time (value 
+  `solar time`) or the difference to local mean time (value
+  `eot`). Default is `solar time`.
+* `html_class`: set am HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
 
 ## Styling
 

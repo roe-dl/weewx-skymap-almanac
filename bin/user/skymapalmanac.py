@@ -122,6 +122,8 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['#bbb4ac19','#ffecd5']))
         if attr=='analemma':
             return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
+        if attr=='equation_of_time':
+            return EquationOfTimeBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
         raise weewx.UnknownType(attr)
 
@@ -1187,7 +1189,6 @@ class AnalemmaBinder:
                 txt = "%s, %s" % (txt,self.location)
             else:
                 # location described by geographic coordinates
-        # location
                 lat_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lon_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lat_s = lat_vt.format("%.4f").replace(' ','&#8199;') # &numsp;
@@ -1203,6 +1204,156 @@ class AnalemmaBinder:
             0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
         s.append(SkymapAlmanacType.SVG_END)
         return "".join(s)
+
+
+class EquationOfTimeBinder:
+
+    EOT_LABEL = 'Equation of Time'
+    Y_AXIS_LABELS = {'solar time':'Solar time','difference':EOT_LABEL,'equation of time':EOT_LABEL,'eot':EOT_LABEL}
+    
+    def __init__(self, config_dict, station_location, almanac_obj, labels):
+        self.credits = '%s %s' % (labels['©'],station_location)
+        self.location = station_location
+        self.almanac_obj = almanac_obj
+        self.labels = labels
+        self.colors = config_dict.get('analemma_colors',['currentColor','#808080','#7cb5ec','#f7a35c'])
+        self.width = 600
+        self.height = 300
+        self.x = None
+        self.y = None
+        self.noon = True
+        self.show_today = True
+        self.show_lmt = True
+        self.y_axis = 'solar time'
+        self.html_class = None
+        self.id = None
+
+    def __call__(self, **kwargs):
+        for key in kwargs:
+            if key in {'width','height'}:
+                setattr(self,key,weeutil.weeutil.to_int(kwargs[key]))
+            elif key in {'noon','show_today'}:
+                setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
+            else:
+                setattr(self,key,kwargs[key])
+        return self
+
+    def __str__(self):
+        try:
+            return self.equation_of_time()
+        except Exception as e:
+            logerr("analemma %s %s" % (e.__class__.__name__,e))
+            weeutil.logger.log_traceback(log.error, "analemma ****  ")
+            return ""
+    
+    def equation_of_time(self):
+        # diagram area
+        fontsize = self.height/25
+        x0 = int(fontsize*4.5)
+        y0 = int(self.height-fontsize*2.7)
+        width = int(self.width-x0-fontsize)
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.y_axis.lower()=='solar time' else 0)))
+        # midnight at the beginning of the year
+        year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
+        year_len = (year[1]-year[0])/86400
+        # offset of the beginning of the archive year span to UTC
+        tz_offset = round(year[0]/86400,0)*86400-year[0]
+        # time of day (based on year[0] which is midnight civil time)
+        if self.noon:
+            hms = 86400/2-self.almanac_obj.lon*240+tz_offset
+        else:
+            hms = (self.almanac_obj.time_ts-year[0])%86400
+        # convert to Skyfield time
+        time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0]+hms)
+        t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
+        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1])
+        logdbg("EoT year=(%s,%s) ti=%s" % (t0,t1,time_ti))
+        # list of the days of a year
+        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0)))])
+        # location
+        observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
+        # solar time
+        ha, _, _ = observer.at(days).observe(body).apparent().hadec()
+        hah = ha.hours
+        #
+        min_hour = numpy.floor(numpy.min(hah)*60.0-2.0)/60.0
+        max_hour = numpy.ceil(numpy.max(hah)*60.0+2.0)/60.0
+        #avg_hour = sum(hah)/len(hah)
+        #loginf('min_hour=%s max_hour=%s avg_hour=%s' % (min_hour,max_hour,avg_hour))
+        #
+        x_factor = width/year_len
+        y_factor = height/(min_hour-max_hour)
+        ys = (hah-min_hour)*y_factor+y0
+        # local mean time
+        y_lmt = (hms-tz_offset+self.almanac_obj.lon*240)-86400/2
+        y_lmt = (y_lmt/3600-min_hour)*y_factor+y0
+        #
+        s = [SkymapAlmanacType.SVG_START,
+             '\n   width="%s" height="%s"' % (self.width,self.height),
+             '\n   viewBox="%s %s %s %s"' % (0,0,self.width,self.height),
+             '\n   xmlns="http://www.w3.org/2000/svg"',
+             '\n   ckass="%s"' % self.html_class if self.html_class else '',
+             '\n   id="%s"' % self.id if self.id else '',
+             '>\n',
+             '<desc>Equation of Time for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s</desc>\n' % (
+                 abs(self.almanac_obj.lat),
+                 'N' if self.almanac_obj.lat>=0 else 'S',
+                 abs(self.almanac_obj.lon),
+                 'E' if self.almanac_obj.lon>=0 else 'W',
+                 time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
+                 time.strftime("%H:%M:%S %Z",time.localtime(year[0]+hms))
+             ),
+             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n'
+        ]
+        s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
+            x0,y0-height,width,height,self.colors[0]))
+        # x scale
+        yr = time.localtime(self.almanac_obj.time_ts).tm_year
+        for i in range(1,14):
+            t = time.localtime(time.mktime((yr,i if i<13 else 1,1,12,0,0,0,0,-1)))
+            x = ((t.tm_yday-1) if i<13 else year_len)*x_factor+x0
+            if 1<i<13:
+                s.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
+            t = time.strftime('%x',t).replace(str(yr),'').strip()
+            if t[0] in {'-','/'}: t = t[1:]
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+                x,y0+fontsize*1.1,self.colors[0],fontsize,t))
+        # y scale
+        st_to_ha = 12 if self.y_axis.lower()=='solar time' else 0
+        for i in range(int(numpy.ceil(min_hour*12.0)),int(numpy.floor(max_hour*12.0))+1):
+            y = (i/12.0-min_hour)*y_factor+y0
+            if min_hour*12.0<i<max_hour*12.0 and not (self.show_lmt and abs(y-y_lmt)<0.0001):
+                s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />' % (x0,y,x0+width,y,self.colors[1]))
+            frac, whole = numpy.modf(i/12.0+st_to_ha)
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%.0f:%02.0f</text>\n' % (x0-3,y,self.colors[0],fontsize,whole,abs(frac*60)))
+        txt = EquationOfTimeBinder.Y_AXIS_LABELS.get(self.y_axis.lower(),'')
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
+            x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,self.labels.get(txt,txt)))
+        # today
+        if self.show_today:
+            x = (time.localtime(self.almanac_obj.time_ts).tm_yday-1)*x_factor+x0
+            s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[3]))
+        # mean time
+        if self.show_lmt:
+            s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />\n' % (x0,y_lmt,x0+width,y_lmt,self.colors[3]))
+        # equation of time
+        s.append('<path fill="none" stroke="%s" stroke-width="2" d="M%.4f,%.4f' % (self.colors[2],0.0*x_factor+x0,ys[0]))
+        s.extend(['L%.4f,%.4f' % ((x+1)*x_factor+x0,y) for x,y in enumerate(ys[1:])])
+        s.append('" />\n')
+        # caption
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)))
+        if self.y_axis.lower()=='solar time':
+            t1 = time.strftime('%X',time.gmtime(year[0]+hms+self.almanac_obj.lon*240))
+            t2 = self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms
+            t2 = time.strftime('%X %Z',time.localtime(t2))
+            txt = 'solar time at %s local mean time (%s)'
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
+                self.labels.get(txt,txt) % (t1,t2)))
+        # 
+        s.append(SkymapAlmanacType.SVG_END)
+        return ''.join(s)
 
 
 def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
@@ -1353,6 +1504,8 @@ class SkymapService(StdService):
                     'Apparent size':'Scheinbare Größe',
                     'In constellation':'Im Sternbild',
                     'Moon tilt':'Neigung',
+                    'Equation of Time':'Zeitgleichung',
+                    'solar time at %s local mean time (%s)':'Sonnenzeit um %s Uhr mittlere Ortszeit (%s)',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -1367,6 +1520,7 @@ class SkymapService(StdService):
                     'Magnitude':'Hvězdná velikost',
                     'First point of Aries':'Jarní bod',
                     'In constellation':'V souhvězdí',
+                    'Equation of Time':'Časová rovnice',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'venus':'Venuše',
@@ -1382,6 +1536,7 @@ class SkymapService(StdService):
                     'Sidereal time':'Sterrentijd',
                     'Distance':'Afstand',
                     'In constellation':'in het sterrenbeeld',
+                    'Equation of Time':'Tijdsvereffening',
                     # planet names that are different from English
                     'mercury':'Mercurius',
                     'earth':'de Aarde',
@@ -1401,6 +1556,7 @@ class SkymapService(StdService):
                     'Apparent size':'Taille apparente',
                     'Moon tilt':'Inclinaison',
                     'In constellation': 'Dans la constellation',
+                    'Equation of Time':'Équation du temps',
                     # planet names that are different from English
                     'mercury': 'Mercure',
                     'mercury_barycenter': 'Mercure',
@@ -1420,7 +1576,7 @@ class SkymapService(StdService):
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
                     # get language dependend texts used in astronomy
                     x = data.get('Texts',dict())
-                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time'}:
+                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time','Equation of Time'}:
                         if key in x:
                             conf[key] = x[key]
                     for key in {'Sun','Moon'}:
@@ -1429,7 +1585,7 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt','Distance','In constellation'}:
+                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt','Distance','In constellation','Equation of Time'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets
