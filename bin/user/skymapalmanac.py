@@ -122,7 +122,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['#bbb4ac19','#ffecd5']))
         if attr=='analemma':
             return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
-        if attr=='equation_of_time':
+        if attr=='eot_diagram':
             return EquationOfTimeBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
         raise weewx.UnknownType(attr)
@@ -1209,7 +1209,7 @@ class AnalemmaBinder:
 class EquationOfTimeBinder:
 
     EOT_LABEL = 'Equation of Time'
-    Y_AXIS_LABELS = {'solar time':'Solar time','difference':EOT_LABEL,'equation of time':EOT_LABEL,'eot':EOT_LABEL}
+    Y_AXIS_LABELS = {'solar time':'Solar time','lmt':'Local mean time','solar-mean':EOT_LABEL,'mean-solar':EOT_LABEL,'time of day':'Time of day'}
     
     def __init__(self, config_dict, station_location, almanac_obj, labels):
         self.credits = '%s %s' % (labels['©'],station_location)
@@ -1217,8 +1217,8 @@ class EquationOfTimeBinder:
         self.almanac_obj = almanac_obj
         self.labels = labels
         self.colors = config_dict.get('analemma_colors',['currentColor','#808080','#7cb5ec','#f7a35c'])
-        self.width = 600
-        self.height = 300
+        self.width = 585
+        self.height = 414
         self.x = None
         self.y = None
         self.noon = True
@@ -1247,19 +1247,22 @@ class EquationOfTimeBinder:
             return ""
     
     def equation_of_time(self):
+        sunrise_transit_sunset = self.y_axis.lower()=='time of day'
         # diagram area
-        fontsize = self.height/25
+        fontsize = self.height/34.5
         x0 = int(fontsize*4.5)
         y0 = int(self.height-fontsize*2.7)
         width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.y_axis.lower()=='solar time' else 0)))
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.y_axis.lower() in {'solar time','lmt'} or sunrise_transit_sunset else 0)))
         # midnight at the beginning of the year
         year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
         year_len = (year[1]-year[0])/86400
         # offset of the beginning of the archive year span to UTC
         tz_offset = round(year[0]/86400,0)*86400-year[0]
         # time of day (based on year[0] which is midnight civil time)
-        if self.noon:
+        if self.y_axis.lower()=='time of day':
+            hms = 86400/2
+        elif self.noon:
             hms = 86400/2-self.almanac_obj.lon*240+tz_offset
         else:
             hms = (self.almanac_obj.time_ts-year[0])%86400
@@ -1272,18 +1275,46 @@ class EquationOfTimeBinder:
         days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0)))])
         # location
         observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
-        # solar time
-        ha, _, _ = observer.at(days).observe(body).apparent().hadec()
-        hah = ha.hours
+        # calculate diagram
+        if sunrise_transit_sunset:
+            # sunrise, transit, sunset
+            tr, yr = skyfield.almanac.find_risings(observer, body, t0, t1)
+            tt = skyfield.almanac.find_transits(observer, body, t0, t1)
+            ts, ys = skyfield.almanac.find_settings(observer, body, t0, t1)
+            trh = (tr-days)*24
+            tth = (tt-days)*24
+            tsh = (ts-days)*24
+            hah = [numpy.min(trh),numpy.max(tsh)] 
+            padding = 10.0
+        elif self.y_axis.lower()=='lmt':
+            # equation of time: mean solar time
+            days, hah = self.solar_time_to_eot(t0, t1, observer, body)
+            padding = 2.0
+        else:
+            # euqation of time: apparent solar time
+            ha, _, _ = observer.at(days).observe(body).apparent().hadec()
+            hah = ha.hours
+            if self.y_axis.lower()=='mean-solar': hah *= -1
+            padding = 2.0
         #
-        min_hour = numpy.floor(numpy.min(hah)*60.0-2.0)/60.0
-        max_hour = numpy.ceil(numpy.max(hah)*60.0+2.0)/60.0
+        min_hour = numpy.floor(numpy.min(hah)*60.0-padding)/60.0
+        max_hour = numpy.ceil(numpy.max(hah)*60.0+padding)/60.0
         #avg_hour = sum(hah)/len(hah)
         #loginf('min_hour=%s max_hour=%s avg_hour=%s' % (min_hour,max_hour,avg_hour))
-        #
+        # 
         x_factor = width/year_len
         y_factor = height/(min_hour-max_hour)
-        ys = (hah-min_hour)*y_factor+y0
+        # line
+        if sunrise_transit_sunset:
+            # sunrise, transit, sunset
+            ys = (
+                ((trh-min_hour)*y_factor+y0,'#ffc000'),
+                ((tth-min_hour)*y_factor+y0,'#ed7d30'),
+                ((tsh-min_hour)*y_factor+y0,'#0070c0')
+            )
+        else:
+            # equation of time 
+            ys = (((hah-min_hour)*y_factor+y0,self.colors[2]),)
         # local mean time
         y_lmt = (hms-tz_offset+self.almanac_obj.lon*240)-86400/2
         y_lmt = (y_lmt/3600-min_hour)*y_factor+y0
@@ -1319,14 +1350,17 @@ class EquationOfTimeBinder:
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
                 x,y0+fontsize*1.1,self.colors[0],fontsize,t))
         # y scale
-        st_to_ha = 12 if self.y_axis.lower()=='solar time' else 0
-        for i in range(int(numpy.ceil(min_hour*12.0)),int(numpy.floor(max_hour*12.0))+1):
-            y = (i/12.0-min_hour)*y_factor+y0
-            if min_hour*12.0<i<max_hour*12.0 and not (self.show_lmt and abs(y-y_lmt)<0.0001):
-                s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />' % (x0,y,x0+width,y,self.colors[1]))
-            frac, whole = numpy.modf(i/12.0+st_to_ha)
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%.0f:%02.0f</text>\n' % (x0-3,y,self.colors[0],fontsize,whole,abs(frac*60)))
+        st_to_ha = 12 if self.y_axis.lower() in {'solar time','lmt'} or sunrise_transit_sunset else 0
+        scale = 1.0 if sunrise_transit_sunset else 12.0
+        for i in range(int(numpy.ceil(min_hour*scale)),int(numpy.floor(max_hour*scale))+1):
+                y = (i/scale-min_hour)*y_factor+y0
+                if min_hour*scale<i<max_hour*scale and (not (self.show_lmt and abs(y-y_lmt)<0.0001) or sunrise_transit_sunset):
+                    s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />' % (x0,y,x0+width,y,self.colors[1]))
+                frac, whole = numpy.modf(i/scale+st_to_ha)
+                s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%.0f:%02.0f</text>\n' % (x0-3,y,self.colors[0],fontsize,whole,abs(frac*60)))
         txt = EquationOfTimeBinder.Y_AXIS_LABELS.get(self.y_axis.lower(),'')
+        if sunrise_transit_sunset:
+            txt = '%s (%s)' % (txt,time.strftime('%Z',time.localtime(year[0])))
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
             x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,self.labels.get(txt,txt)))
         # today
@@ -1334,15 +1368,19 @@ class EquationOfTimeBinder:
             x = (time.localtime(self.almanac_obj.time_ts).tm_yday-1)*x_factor+x0
             s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[3]))
         # mean time
-        if self.show_lmt:
+        if self.show_lmt and not sunrise_transit_sunset:
             s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />\n' % (x0,y_lmt,x0+width,y_lmt,self.colors[3]))
-        # equation of time
-        s.append('<path fill="none" stroke="%s" stroke-width="2" d="M%.4f,%.4f' % (self.colors[2],0.0*x_factor+x0,ys[0]))
-        s.extend(['L%.4f,%.4f' % ((x+1)*x_factor+x0,y) for x,y in enumerate(ys[1:])])
-        s.append('" />\n')
+        # lines
+        if (days[1].ut1-days[0].ut1)<1.0: x_factor *= days[1].ut1-days[0].ut1
+        for yy, color in ys:
+            s.append('<path fill="none" stroke="%s" stroke-width="2" d="M%.4f,%.4f' % (color,0.0*x_factor+x0,yy[0]))
+            s.extend(['L%.4f,%.4f' % ((x+1)*x_factor+x0,y) for x,y in enumerate(yy[1:])])
+            s.append('" />\n')
         # caption
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
-            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)))
+            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,
+            self.labels.get('sun','Sun') if sunrise_transit_sunset else self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)
+        ))
         if self.y_axis.lower()=='solar time':
             t1 = time.strftime('%X',time.gmtime(year[0]+hms+self.almanac_obj.lon*240))
             t2 = self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms
@@ -1351,9 +1389,51 @@ class EquationOfTimeBinder:
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
                 self.labels.get(txt,txt) % (t1,t2)))
+        elif self.y_axis.lower()=='lmt':
+            t1 = '12:00:00'
+            txt = 'local mean time at %s solar time'
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
+                self.labels.get(txt,txt) % t1 ))
+        elif sunrise_transit_sunset:
+            tz = time.strftime('%Z',time.localtime(year[0]))
+            yr = time.strftime('%Y',time.localtime(year[0]))
+            txt = '%s, %s, %s' % (self.location,yr,tz)
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
+                self.labels.get(txt,txt)  ))
         # 
         s.append(SkymapAlmanacType.SVG_END)
         return ''.join(s)
+
+    def solar_time_to_eot(self, t0, t1, observer, sun):
+        """ get the timestamps of solar noon and midnight 
+        
+            Args:
+                t0 (Time): start of time span
+                t1 (Time): end of time span
+                observer: observer
+                sun: ephemeres of the Sun
+            
+            Returns:
+                Time: solar time
+                float: equation of time (mean solar time - apparent solar time)
+        
+            Note: That is slow.
+        """
+        # calculate the hour angle
+        def sun_hour_angle(t):
+            ha, _, _ = observer.at(t).observe(sun).apparent().hadec()
+            return ha.radians>=0.0
+        sun_hour_angle.step_days = 0.5
+        # get the mean time of the first event to find
+        frac, whole = numpy.modf(t0.ut1)
+        t3 = user.skyfieldalmanac.ts.ut1_jd(whole+(0.5 if frac<0.5 else 1.0)-self.almanac_obj.lon*240/86400)
+        # find solar noon and midnight
+        t, v = skyfield.searchlib.find_discrete(t0, t1, sun_hour_angle)
+        # get the time scale
+        t4 = user.skyfieldalmanac.ts.ut1_jd([t3.ut1+i/2 for i in range(len(t))])
+        return t4, (t.ut1-t4.ut1)*24
 
 
 def moon(id, txt, x, y, r, distance, col, radius, phase, short_label, shape):
@@ -1506,6 +1586,8 @@ class SkymapService(StdService):
                     'Moon tilt':'Neigung',
                     'Equation of Time':'Zeitgleichung',
                     'solar time at %s local mean time (%s)':'Sonnenzeit um %s Uhr mittlere Ortszeit (%s)',
+                    'local mean time at %s solar time':'mittlere Ortszeit um %s Uhr Sonnenzeit',
+                    'Time of day':'Uhrzeit',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',

@@ -305,10 +305,15 @@ time:
 The equation of time describes the difference between the apparent
 solar time and the local mean time. 
 
+> [!NOTE]
+> The sign of the values changed in history. Originally it was the value
+> to add to a sundial reading to get the mean time. Now the difference
+> between the apparent solar time and the mean solar time is given.
+
 ### Usage
 
-`$almanac.equation_of_time` or with parameters
-`$almanac.equation_of_time(...)`
+`$almanac.eot_diagram` or with parameters
+`$almanac.eot_diagram(...)`
 
 ### Parameters
 
@@ -322,9 +327,15 @@ solar time and the local mean time.
   to). Optional. This is the default
 * `show_lmt`: If `True` mark the average of the solar time. Optional.
   This is the default
-* `y_axis`: The y axis can be labeled with the solar time (value 
-  `solar time`) or the difference to local mean time (value
-  `eot`). Default is `solar time`.
+* `y_axis`: Which unit is used for the y axis and how it is labeled:
+  * `solar time`: Apparent solar time at the given mean time
+  * `lmt`: Mean solar time at the given apparent solar time
+  * `solar-mean`: The difference between apparent solar time and mean solar
+    time (This is the actual way to present it.)
+  * `mean-solar`: The difference between mean solar time and and apparent
+    solar time (This is the historical way to present it.)
+  * `time of day`: Instead of the equation of time draw lines of sunrise,
+    transit, and sunset.
 * `html_class`: set am HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 
