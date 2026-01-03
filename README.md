@@ -336,6 +336,8 @@ solar time and the local mean time.
     solar time (This is the historical way to present it.)
   * `time of day`: Instead of the equation of time draw lines of sunrise,
     transit, and sunset.
+* `location`: String to use as location in the diagram caption. Default
+  is the station location as specified in `weewx.conf`.
 * `html_class`: set am HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 

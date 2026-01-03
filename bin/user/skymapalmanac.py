@@ -1253,7 +1253,7 @@ class EquationOfTimeBinder:
         x0 = int(fontsize*4.5)
         y0 = int(self.height-fontsize*2.7)
         width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.y_axis.lower() in {'solar time','lmt'} or sunrise_transit_sunset else 0)))
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if True else 0)))
         # midnight at the beginning of the year
         year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
         year_len = (year[1]-year[0])/86400
@@ -1336,6 +1336,13 @@ class EquationOfTimeBinder:
              ),
              '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n'
         ]
+        if sunrise_transit_sunset:
+            s.append('<path stroke="none" fill="yellow" opacity="0.1" d="')
+            s.append('M%.4f,%.4f' % (x0,ys[1][0][0]))
+            s.extend(['L%.4f,%.4f' % (x*x_factor+x0,y) for x,y in enumerate(ys[0][0])])
+            s.append('\nL%.4f,%.4f\n' % (x0+width,ys[1][0][-1]))
+            s.extend(['L%.4f,%.4f' % (width-x*x_factor+x0,y) for x,y in enumerate(reversed(ys[2][0]))])
+            s.append('z" />\n')
         s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
             x0,y0-height,width,height,self.colors[0]))
         # x scale
@@ -1359,10 +1366,11 @@ class EquationOfTimeBinder:
                 frac, whole = numpy.modf(i/scale+st_to_ha)
                 s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%.0f:%02.0f</text>\n' % (x0-3,y,self.colors[0],fontsize,whole,abs(frac*60)))
         txt = EquationOfTimeBinder.Y_AXIS_LABELS.get(self.y_axis.lower(),'')
+        txt = self.labels.get(txt,txt)
         if sunrise_transit_sunset:
             txt = '%s (%s)' % (txt,time.strftime('%Z',time.localtime(year[0])))
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
-            x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,self.labels.get(txt,txt)))
+            x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,txt))
         # today
         if self.show_today:
             x = (time.localtime(self.almanac_obj.time_ts).tm_yday-1)*x_factor+x0
@@ -1402,6 +1410,16 @@ class EquationOfTimeBinder:
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
                 self.labels.get(txt,txt)  ))
+        elif self.y_axis.lower()=='mean-solar':
+            txt = '%s &#8722; %s' % ('LMT',self.labels.get('Solar time','Solar time'))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
+                txt  ))
+        elif self.y_axis.lower()=='solar-mean':
+            txt = '%s &#8722; %s' % (self.labels.get('Solar time','Solar time'),'LMT')
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
+                txt  ))
         # 
         s.append(SkymapAlmanacType.SVG_END)
         return ''.join(s)
@@ -1588,6 +1606,7 @@ class SkymapService(StdService):
                     'solar time at %s local mean time (%s)':'Sonnenzeit um %s Uhr mittlere Ortszeit (%s)',
                     'local mean time at %s solar time':'mittlere Ortszeit um %s Uhr Sonnenzeit',
                     'Time of day':'Uhrzeit',
+                    'Local mean time':'mittlere Ortszeit',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
