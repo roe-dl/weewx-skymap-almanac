@@ -341,6 +341,8 @@ solar time and the local mean time.
 * `html_class`: set am HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 
+![equation of time](EoT.png)
+
 ## Styling
 
 ### Dark mode of your web site

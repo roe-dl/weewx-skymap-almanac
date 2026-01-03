@@ -500,7 +500,6 @@ class SkymapBinder:
                 time.strftime("%Y-%m-%dT%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
             ),
             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
-            #'<defs><clipPath id="weewxskymapbackgroundclippath">%s</clipPath></defs>\n' % self.get_horizon(False)
             '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
         ]
         # background
@@ -1242,7 +1241,7 @@ class EquationOfTimeBinder:
         try:
             return self.equation_of_time()
         except Exception as e:
-            logerr("analemma %s %s" % (e.__class__.__name__,e))
+            logerr("equation of time %s %s" % (e.__class__.__name__,e))
             weeutil.logger.log_traceback(log.error, "analemma ****  ")
             return ""
     
@@ -1269,10 +1268,10 @@ class EquationOfTimeBinder:
         # convert to Skyfield time
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0]+hms)
         t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
-        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1])
+        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1]+86400)
         logdbg("EoT year=(%s,%s) ti=%s" % (t0,t1,time_ti))
         # list of the days of a year
-        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0)))])
+        days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0))+1)])
         # location
         observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
         # calculate diagram
@@ -1285,20 +1284,24 @@ class EquationOfTimeBinder:
             tth = (tt-days)*24
             tsh = (ts-days)*24
             hah = [numpy.min(trh),numpy.max(tsh)] 
-            padding = 10.0
+            padding = 0
+            scale = 1.0
         elif self.y_axis.lower()=='lmt':
             # equation of time: mean solar time
             days, hah = self.solar_time_to_eot(t0, t1, observer, body)
             padding = 2.0
+            scale = 60.0
         else:
             # euqation of time: apparent solar time
             ha, _, _ = observer.at(days).observe(body).apparent().hadec()
             hah = ha.hours
             if self.y_axis.lower()=='mean-solar': hah *= -1
             padding = 2.0
-        #
-        min_hour = numpy.floor(numpy.min(hah)*60.0-padding)/60.0
-        max_hour = numpy.ceil(numpy.max(hah)*60.0+padding)/60.0
+            scale = 60.0
+        # minimum and maximum value of the time, which must be in the range
+        # of -12.0 to +12.0
+        min_hour = numpy.max(numpy.floor(numpy.min(hah)*scale-padding)/scale,-12.0)
+        max_hour = numpy.min(numpy.ceil(numpy.max(hah)*scale+padding)/scale,12.0)
         #avg_hour = sum(hah)/len(hah)
         #loginf('min_hour=%s max_hour=%s avg_hour=%s' % (min_hour,max_hour,avg_hour))
         # 
@@ -1318,6 +1321,8 @@ class EquationOfTimeBinder:
         # local mean time
         y_lmt = (hms-tz_offset+self.almanac_obj.lon*240)-86400/2
         y_lmt = (y_lmt/3600-min_hour)*y_factor+y0
+        # clippath id
+        clippathid = "weewxskymapbackgroundclippath%.0f" % ((time.time()%300.0)*10000.0)
         #
         s = [SkymapAlmanacType.SVG_START,
              '\n   width="%s" height="%s"' % (self.width,self.height),
@@ -1334,7 +1339,8 @@ class EquationOfTimeBinder:
                  time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
                  time.strftime("%H:%M:%S %Z",time.localtime(year[0]+hms))
              ),
-             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n'
+             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
+             '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.5,y0-height+0.5,width-1.0,height-1.0)
         ]
         if sunrise_transit_sunset:
             s.append('<path stroke="none" fill="yellow" opacity="0.1" d="')
@@ -1368,9 +1374,13 @@ class EquationOfTimeBinder:
         txt = EquationOfTimeBinder.Y_AXIS_LABELS.get(self.y_axis.lower(),'')
         txt = self.labels.get(txt,txt)
         if sunrise_transit_sunset:
-            txt = '%s (%s)' % (txt,time.strftime('%Z',time.localtime(year[0])))
+            tz = time.strftime('%Z',time.localtime(year[0]))
+            tz = self.labels.get(tz,tz)
+            txt = '%s (%s)' % (txt,tz)
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
             x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,txt))
+        # start clipping
+        s.append('<g clip-path="url(#%s)">\n' % clippathid)
         # today
         if self.show_today:
             x = (time.localtime(self.almanac_obj.time_ts).tm_yday-1)*x_factor+x0
@@ -1384,6 +1394,8 @@ class EquationOfTimeBinder:
             s.append('<path fill="none" stroke="%s" stroke-width="2" d="M%.4f,%.4f' % (color,0.0*x_factor+x0,yy[0]))
             s.extend(['L%.4f,%.4f' % ((x+1)*x_factor+x0,y) for x,y in enumerate(yy[1:])])
             s.append('" />\n')
+        # end clipping
+        s.append('</g>\n')
         # caption
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
             0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,
@@ -1405,21 +1417,19 @@ class EquationOfTimeBinder:
                 self.labels.get(txt,txt) % t1 ))
         elif sunrise_transit_sunset:
             tz = time.strftime('%Z',time.localtime(year[0]))
+            tz = self.labels.get('name(%s)' % tz,self.labels.get(tz,tz))
             yr = time.strftime('%Y',time.localtime(year[0]))
             txt = '%s, %s, %s' % (self.location,yr,tz)
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
                 self.labels.get(txt,txt)  ))
-        elif self.y_axis.lower()=='mean-solar':
-            txt = '%s &#8722; %s' % ('LMT',self.labels.get('Solar time','Solar time'))
+        elif self.y_axis.lower() in {'mean-solar','solar-mean'}:
+            tz1 = 'LMT'
+            tz2 = self.labels.get('Solar time','Solar time')
+            if self.y_axis.lower()=='solar-mean': tz1, tz2 = tz2, tz1
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
-                txt  ))
-        elif self.y_axis.lower()=='solar-mean':
-            txt = '%s &#8722; %s' % (self.labels.get('Solar time','Solar time'),'LMT')
-            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
-                0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
-                txt  ))
+                '%s &#8722; %s' % (tz1,tz2)  ))
         # 
         s.append(SkymapAlmanacType.SVG_END)
         return ''.join(s)
@@ -1589,7 +1599,8 @@ class SkymapService(StdService):
                     'Magnitude':'Magnitude',
                     'First point of Aries':'First point of Aries',
                     'Apparent size':'Apparent size',
-                    'Moon tilt':'Tilt'
+                    'Moon tilt':'Tilt',
+                    'name(CET)':'Central European Time'
                 })
             if lang=='de' or lang.startswith('de_'):
                 conf.update({
@@ -1607,6 +1618,9 @@ class SkymapService(StdService):
                     'local mean time at %s solar time':'mittlere Ortszeit um %s Uhr Sonnenzeit',
                     'Time of day':'Uhrzeit',
                     'Local mean time':'mittlere Ortszeit',
+                    'CET':'MEZ',
+                    'CEST':'MESZ',
+                    'name(CET)':'europäische Normalzeit',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
