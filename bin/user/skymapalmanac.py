@@ -93,6 +93,24 @@ def to_bool(x, valid_strings=()):
     if x in valid_strings: return x
     return weeutil.weeutil.to_bool(x)
 
+def timezone_name(t, abbreviated=True, labels=dict()):
+    """ get the timezone name
+    
+        Args:
+            t: timestamp
+            abbreviated(bool): get abbreviated or long name
+            labels: localized names of the timezone
+        
+        Returns:
+            str: timezone name
+        
+        Note: '%Z' is deprecated for `time.strftime()`
+    """
+    tl = time.localtime(t)
+    tz = tl.tm_zone
+    if abbreviated: return labels.get(tz,tz)
+    return labels.get('name(%s)' % tz,labels.get(tz,tz))
+
 
 class SkymapAlmanacType(weewx.almanac.AlmanacType):
 
@@ -492,12 +510,13 @@ class SkymapBinder:
             '\n  id="%s"' % self.id if self.id else '',
             '\n  style="max-width:%s;max-height:%s;"' % (self.max_width,self.max_width) if self.max_width else ''),
             # SVG description (always in English, not presented to the user)
-            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s</desc>\n' % (
+            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s %s</desc>\n' % (
                 abs(self.almanac_obj.lat),
                 'N' if self.almanac_obj.lat>=0 else 'S',
                 abs(self.almanac_obj.lon),
                'E' if self.almanac_obj.lon>=0 else 'W',
-                time.strftime("%Y-%m-%dT%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
+                time.strftime("%Y-%m-%dT%H:%M:%S",time.localtime(self.almanac_obj.time_ts)),
+                timezone_name(self.almanac_obj.time_ts)
             ),
             '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
             '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
@@ -1069,13 +1088,14 @@ class AnalemmaBinder:
             '\n   id="%s"' % self.id if self.id else ''
         ))
         # SVG description (always in English, not presented to the user)
-        s.append('<desc>Analemma for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s</desc>\n' % (
+        s.append('<desc>Analemma for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s %s</desc>\n' % (
             abs(self.almanac_obj.lat),
             'N' if self.almanac_obj.lat>=0 else 'S',
             abs(self.almanac_obj.lon),
             'E' if self.almanac_obj.lon>=0 else 'W',
             time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
-            time.strftime("%H:%M:%S %Z",time.localtime(self.almanac_obj.time_ts))
+            time.strftime("%H:%M:%S",time.localtime(self.almanac_obj.time_ts)),
+            timezone_name(self.almanac_obj.time_ts)
         ))
         s.append('<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n')
         s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
@@ -1331,13 +1351,14 @@ class EquationOfTimeBinder:
              '\n   ckass="%s"' % self.html_class if self.html_class else '',
              '\n   id="%s"' % self.id if self.id else '',
              '>\n',
-             '<desc>Equation of Time for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s</desc>\n' % (
+             '<desc>Equation of Time for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s %s</desc>\n' % (
                  abs(self.almanac_obj.lat),
                  'N' if self.almanac_obj.lat>=0 else 'S',
                  abs(self.almanac_obj.lon),
                  'E' if self.almanac_obj.lon>=0 else 'W',
                  time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
-                 time.strftime("%H:%M:%S %Z",time.localtime(year[0]+hms))
+                 time.strftime("%H:%M:%S",time.localtime(year[0]+hms)),
+                 timezone_name(year[0]+hms)
              ),
              '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
              '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.5,y0-height+0.5,width-1.0,height-1.0)
@@ -1374,8 +1395,7 @@ class EquationOfTimeBinder:
         txt = EquationOfTimeBinder.Y_AXIS_LABELS.get(self.y_axis.lower(),'')
         txt = self.labels.get(txt,txt)
         if sunrise_transit_sunset:
-            tz = time.strftime('%Z',time.localtime(year[0]))
-            tz = self.labels.get(tz,tz)
+            tz = timezone_name(year[0],True,self.labels)
             txt = '%s (%s)' % (txt,tz)
         s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
             x0-3.8*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,txt))
@@ -1404,7 +1424,7 @@ class EquationOfTimeBinder:
         if self.y_axis.lower()=='solar time':
             t1 = time.strftime('%X',time.gmtime(year[0]+hms+self.almanac_obj.lon*240))
             t2 = self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms
-            t2 = time.strftime('%X %Z',time.localtime(t2))
+            t2 = '%s %s' % (time.strftime('%X',time.localtime(t2)),timezone_name(t2,True,self.labels))
             txt = 'solar time at %s local mean time (%s)'
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
@@ -1416,8 +1436,7 @@ class EquationOfTimeBinder:
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
                 self.labels.get(txt,txt) % t1 ))
         elif sunrise_transit_sunset:
-            tz = time.strftime('%Z',time.localtime(year[0]))
-            tz = self.labels.get('name(%s)' % tz,self.labels.get(tz,tz))
+            tz = timezone_name(year[0],False,self.labels)
             yr = time.strftime('%Y',time.localtime(year[0]))
             txt = '%s, %s, %s' % (self.location,yr,tz)
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
@@ -1621,7 +1640,7 @@ class SkymapService(StdService):
                     'Local mean time':'mittlere Ortszeit',
                     'CET':'MEZ',
                     'CEST':'MESZ',
-                    'name(CET)':'europäische Normalzeit',
+                    'name(CET)':'mitteleuropäische Normalzeit',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -1637,6 +1656,8 @@ class SkymapService(StdService):
                     'First point of Aries':'Jarní bod',
                     'In constellation':'V souhvězdí',
                     'Equation of Time':'Časová rovnice',
+                    'CET':"SEČ",
+                    'name(CET)':"středoevropský čas",
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'venus':'Venuše',
@@ -1653,6 +1674,8 @@ class SkymapService(StdService):
                     'Distance':'Afstand',
                     'In constellation':'in het sterrenbeeld',
                     'Equation of Time':'Tijdsvereffening',
+                    'CET':"MET",
+                    'name(CET)':"Midden-Europese Tijd",
                     # planet names that are different from English
                     'mercury':'Mercurius',
                     'earth':'de Aarde',
@@ -1673,6 +1696,9 @@ class SkymapService(StdService):
                     'Moon tilt':'Inclinaison',
                     'In constellation': 'Dans la constellation',
                     'Equation of Time':'Équation du temps',
+                    'CET':'HNEC',
+                    'name(CET)':"Heure normale d'Europe centrale",
+                    'name(WET)':"Heure d'Europe de l'Ouest",
                     # planet names that are different from English
                     'mercury': 'Mercure',
                     'mercury_barycenter': 'Mercure',
@@ -1681,6 +1707,7 @@ class SkymapService(StdService):
                     'saturn': 'Saturne',
                     'saturn_barycenter': 'Saturne'
             })
+            # get language dependent words out of the built-in Seasons skin for language `lang`
             skin = os.path.join(skin_root,'Seasons','lang')
             try:
                 data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0].split('_')[0]))
@@ -1692,7 +1719,7 @@ class SkymapService(StdService):
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
                     # get language dependend texts used in astronomy
                     x = data.get('Texts',dict())
-                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time','Equation of Time'}:
+                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Solar time','Sidereal time'}:
                         if key in x:
                             conf[key] = x[key]
                     for key in {'Sun','Moon'}:
@@ -1701,7 +1728,7 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt','Distance','In constellation','Equation of Time'}:
+                    for key in {'Altitude','Magnitude','Solar time','Sidereal time','First point of Aries','Apparent size','Moon tilt','Distance'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets
