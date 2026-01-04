@@ -140,10 +140,10 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         labels = {i:planet_names[j] for i,j in user.skyfieldalmanac.PLANETS_IDX.items() if j<len(planet_names)}
         # find the language of this skin
         new_moon = almanac_obj.moon_phases[0]
-        for lang, val in self.config_dict['Texts'].items():
-            if val['moon_phase_new_moon']==new_moon:
-                labels.update(val)
-                break
+        lang = self.config_dict['Languages'].get(new_moon)
+        if lang in self.config_dict['Texts']:
+            labels.update(self.config_dict['Texts'][lang])
+        labels['lang'] = lang
         # get other entries from [Almanac] section
         if 'texts' in almanac_obj.__dict__:
             labels.update({i:j for i,j in almanac_obj.texts.items() if i not in {'planet_names','moon_phases','venus_phases','mercury_phases'}})
@@ -1300,8 +1300,8 @@ class EquationOfTimeBinder:
             scale = 60.0
         # minimum and maximum value of the time, which must be in the range
         # of -12.0 to +12.0
-        min_hour = numpy.max(numpy.floor(numpy.min(hah)*scale-padding)/scale,-12.0)
-        max_hour = numpy.min(numpy.ceil(numpy.max(hah)*scale+padding)/scale,12.0)
+        min_hour = numpy.clip(numpy.floor(numpy.min(hah)*scale-padding)/scale,-12.0,12.0)
+        max_hour = numpy.clip(numpy.ceil(numpy.max(hah)*scale+padding)/scale,-12.0,12.0)
         #avg_hour = sum(hah)/len(hah)
         #loginf('min_hour=%s max_hour=%s avg_hour=%s' % (min_hour,max_hour,avg_hour))
         # 
@@ -1540,6 +1540,7 @@ class SkymapService(StdService):
         alm_conf_dict = _get_config(config_dict)
         if alm_conf_dict['enable']:
             alm_conf_dict['Texts'] = self.process_language(config_dict)
+            alm_conf_dict['Languages'] = { val['moon_phase_new_moon']:lang for lang,val in alm_conf_dict['Texts'].items() }
             alm_conf_dict['Constellationship'] = self.process_constellationship(config_dict)
             # instantiate the Skymap almanac
             self.skymap_almanac = SkymapAlmanacType(alm_conf_dict, self.path, engine.stn_info.location)
