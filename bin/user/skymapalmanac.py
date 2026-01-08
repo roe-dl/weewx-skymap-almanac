@@ -1262,7 +1262,7 @@ class EquationOfTimeBinder:
             return self.equation_of_time()
         except Exception as e:
             logerr("equation of time %s %s" % (e.__class__.__name__,e))
-            weeutil.logger.log_traceback(log.error, "analemma ****  ")
+            weeutil.logger.log_traceback(log.error, "eot ****  ")
             return ""
     
     def equation_of_time(self):
