@@ -8,7 +8,7 @@
 0.3 04dec2025
 * if current working directory is not available
 * docu how to check for the availability of this extension
-0.4
+0.4 08jan2025
 * fix #2
 * add HTML class and id attribute
 * example skin
