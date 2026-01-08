@@ -36,5 +36,5 @@ Sidereal time | Temps sidéral | Sternzeit  | Sterrentijd | Hvězdný čas  | St
 Magnitude     | Magnitude     | Magnitude  | Magnitude   | Hvězdná velikost | Magnitude
 First point of Aries | Point Vernal | Frühlingspunkt | Lentepunt | Jarní bod | Værens punkt
 Apparent size | Taille apparente | Scheinbare Größe | | Úhlová velikost | Tilsynelatende størrelse
-Moon tilt     | Inclinaison   | Neigung    | | | | Månetilt
+Moon tilt     | Inclinaison   | Neigung    | | | Månetilt
 Distance      | Distance      | Entfernung | Afstand     | Vzdálenost | fra et himmellegeme
