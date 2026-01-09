@@ -22,10 +22,10 @@ In section `[Texts]`:
 
 Key = English | French    | German   | Dutch      | Czech    | Norwegian
 --------------|-----------|----------|------------|----------|-----------
-Perihelion    | Périhélie | Perihel  | Perihelium | Perihel  | Perihelion
-Aphelion      | Aphélie   | Aphel    | Aphelium   | Afel     | Aphelion
-Perigee       | Périgée   | Perigäum | Perigeum   | Perigeum | Periselen
-Apogee        | Apogée    | Apogäum  | Apogeum    | Apogeum  | Aposelen
+Perihelion    | Périhélie | Perihel  | Perihelium | Perihel  | Perihel
+Aphelion      | Aphélie   | Aphel    | Aphelium   | Afel     | Aphel
+Perigee       | Périgée   | Perigäum | Perigeum   | Perigeum | Perigeum
+Apogee        | Apogée    | Apogäum  | Apogeum    | Apogeum  | Apogeum
 
 In section `[Texts]`, subsection `[[Astronomical]]`:
 

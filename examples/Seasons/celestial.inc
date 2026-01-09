@@ -224,6 +224,15 @@
           $almanac.skymap(width=700)
         </div>
       </div>
+      <div class="celestial_body">
+        $almanac.eot_diagram(y_axis='time of day')
+      </div>
+      <div class="celestial_body">
+        $almanac.eot_diagram(y_axis='solar time')
+      </div>
+      <div class="celestial_body">
+        $almanac.analemma
+      </div>
       #end if
     </div>
   #else
