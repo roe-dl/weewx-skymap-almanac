@@ -328,8 +328,8 @@ solar time and the local mean time.
 * `show_lmt`: If `True` mark the average of the solar time. Optional.
   This is the default
 * `y_axis`: Which unit is used for the y axis and how it is labeled:
-  * `solar time`: Apparent solar time at the given mean time
-  * `lmt`: Mean solar time at the given apparent solar time
+  * `lat`: Local apparent solar time at the given mean time
+  * `lmt`: Local mean solar time at the given apparent solar time
   * `solar-mean`: The difference between apparent solar time and mean solar
     time (This is the actual way to present it.)
   * `mean-solar`: The difference between mean solar time and and apparent

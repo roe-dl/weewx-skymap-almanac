@@ -10,7 +10,7 @@ def loader():
 class SkymapInstaller(ExtensionInstaller):
     def __init__(self):
         super(SkymapInstaller, self).__init__(
-            version="0.4",
+            version="0.5",
             name='Skymap almanac',
             description='almanac extension using Skyfield mdule',
             author="Johanna Roedenbeck",
