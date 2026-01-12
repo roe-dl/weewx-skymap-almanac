@@ -1278,18 +1278,21 @@ class EquationOfTimeBinder:
         year_len = (year[1]-year[0])/86400
         # offset of the beginning of the archive year span to UTC
         tz_offset = round(year[0]/86400,0)*86400-year[0]
+        # convert the timespan to Skyfield time
+        t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
+        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1]+86400)
         # time of day (based on year[0] which is midnight civil time)
-        if self.y_axis.lower()=='time of day':
-            hms = 86400/2
-        elif self.noon:
-            hms = 86400/2-self.almanac_obj.lon*240+tz_offset
+        if self.noon or self.y_axis.lower()=='time of day':
+            # equation of time at noon, sunrise-transit-sunset diagram
+            hms = 86400/2-self.almanac_obj.lon*240+tz_offset-t0.dut1
         else:
+            # equation of time at current time
             hms = (self.almanac_obj.time_ts-year[0])%86400
         # convert to Skyfield time
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0]+hms)
-        t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
-        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1]+86400)
-        logdbg("EoT year=(%s,%s) ti=%s" % (t0,t1,time_ti))
+        logdbg("EoT %s year=(%s,%s) ti=%s" % (self.y_axis,t0,t1,time_ti))
+        #loginf("EoT %s year.ut1=(%s,%s) ti.ut1=%s" % (self.y_axis,t0.ut1,t1.ut1,time_ti.ut1))
+        #loginf("EoT %s year.utc=(%s,%s) ti.utc=%s" % (self.y_axis,t0.utc_iso(places=2),t1.utc_iso(places=2),time_ti.utc_iso(places=2)))
         # list of the days of a year
         days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0))+1)])
         # location
@@ -1322,9 +1325,9 @@ class EquationOfTimeBinder:
         # of -12.0 to +12.0
         min_hour = numpy.clip(numpy.floor(numpy.min(hah)*scale-padding)/scale,-12.0,12.0)
         max_hour = numpy.clip(numpy.ceil(numpy.max(hah)*scale+padding)/scale,-12.0,12.0)
-        #avg_hour = sum(hah)/len(hah)
-        #loginf('min_hour=%s max_hour=%s avg_hour=%s' % (min_hour,max_hour,avg_hour))
-        # 
+        #avg_hour = sum(hah[:(-2 if self.y_axis.lower()=='lmt' else -1)])/len(hah[:(-2 if self.y_axis.lower()=='lmt' else -1)])
+        #loginf('min_hour=%.6fh max_hour=%.6fh avg_hour=%.6fh (%.2fs)' % (min_hour,max_hour,avg_hour,avg_hour*3600))
+        # scaling factors
         x_factor = width/year_len
         y_factor = height/(min_hour-max_hour)
         # line
@@ -1351,14 +1354,15 @@ class EquationOfTimeBinder:
              '\n   ckass="%s"' % self.html_class if self.html_class else '',
              '\n   id="%s"' % self.id if self.id else '',
              '>\n',
-             '<desc>Equation of Time for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s %s</desc>\n' % (
+             '<desc>Equation of Time for %.4f&#176; %s, %08.4f&#176; %s for the year %s at %s %s, dUT1=%.4fs</desc>\n' % (
                  abs(self.almanac_obj.lat),
                  'N' if self.almanac_obj.lat>=0 else 'S',
                  abs(self.almanac_obj.lon),
                  'E' if self.almanac_obj.lon>=0 else 'W',
                  time.strftime("%Y",time.localtime(self.almanac_obj.time_ts)),
                  time.strftime("%H:%M:%S",time.localtime(year[0]+hms)),
-                 timezone_name(year[0]+hms)
+                 timezone_name(year[0]+hms),
+                 time_ti.dut1
              ),
              '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
              '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.5,y0-height+0.5,width-1.0,height-1.0)
@@ -1423,8 +1427,8 @@ class EquationOfTimeBinder:
             self.labels.get('sun','Sun') if sunrise_transit_sunset else self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)
         ))
         if self.y_axis.lower() in {'solar time','lat'}:
-            t1 = time.strftime('%X',time.gmtime(year[0]+hms+self.almanac_obj.lon*240))
-            t2 = self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms
+            t1 = time.strftime('%X',time.gmtime(round(year[0]+hms+self.almanac_obj.lon*240,0)))
+            t2 = round(self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms,0)
             t2 = '%s %s' % (time.strftime('%X',time.localtime(t2)),timezone_name(t2,True,self.labels))
             txt = '{LAT} at {tLMT} {LMT} ({tCivil})'
             txt = '{tLMT} {LMT} ({tCivil}) &#8658; {LAT}'
