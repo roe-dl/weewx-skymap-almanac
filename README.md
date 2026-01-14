@@ -12,6 +12,7 @@ Sky map for WeeWX
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Equation of time](#equation-of-time)
+* [Diagram of visibility](#diagram-of-visibility]
 * [Styling](#styling)
   * [Dark mode of your web site](#dark-mode-of-your-web-site)
   * [General font setting](#general-font-setting)
@@ -342,6 +343,32 @@ solar time and the local mean time.
 * `id`: assign an HTML ID to the SVG tag
 
 ![equation of time](EoT.png)
+
+## Diagram of visibility
+
+This diagram shows rising, transit, and setting time of a heavenly body.
+All bodies loaded into the
+[weewx-skyfield-almanac extension](https://github.com/roe-dl/weewx-skyfield-almanac)
+are available. 
+
+### Usage
+
+`$almanac.heavenly_body.year_diagram` or
+`$almanac.heavenly_body.year_diagram(...)`
+
+### Parameters
+
+* `width`: Width of the diagram
+* `height`: Height of the diagram
+* `show_today`: If `True` mark the actual day (the day `$almanac` is bound
+  to). Optional. This is the default
+* `location`: String to use as location in the diagram caption. Default
+  is the station location as specified in `weewx.conf`.
+* `html_class`: set am HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
+
+Replace `heavenly_body` by the name of the body. In case of outer planets
+add `_barycenter`.
 
 ## Styling
 

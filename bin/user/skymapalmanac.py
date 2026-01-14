@@ -1319,17 +1319,24 @@ class EquationOfTimeBinder:
         observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,self.heavenly_body,False)
         # calculate diagram
         if sunrise_transit_sunset:
-            # sunrise, transit, sunset
+            # rise, transit, set
             tr, yr = skyfield.almanac.find_risings(observer, body, t0, t1)
             tt = skyfield.almanac.find_transits(observer, body, t0, t1)
             ts, ys = skyfield.almanac.find_settings(observer, body, t0, t1)
-            trh = (tr-days)*24
-            tth = (tt-days)*24
-            tsh = (ts-days)*24
-            #trh = ((tr-time_ti)%1)*24
-            #tth = ((tt-time_ti)%1)*24
-            #tsh = ((ts-time_ti)%1)*24
-            hah = [numpy.min(trh),numpy.max(trh),numpy.min(tsh),numpy.max(tsh)] 
+            # rise relative to noon
+            trh = tr-time_ti
+            trd = numpy.round(trh,0)
+            trh = (trh-trd)*24
+            # transit relative to noon
+            tth = tt-time_ti
+            ttd = numpy.round(tth,0)
+            tth = (tth-ttd)*24
+            # set relative to noon
+            tsh = ts-time_ti
+            tsd = numpy.round(tsh,0)
+            tsh = (tsh-tsd)*24
+            # all values together for determining the y scale range
+            hah = [numpy.nanmin(trh),numpy.nanmax(trh),numpy.nanmin(tsh),numpy.nanmax(tsh)]
             padding = 0
             scale = 1.0
         elif self.y_axis.lower()=='lmt':
@@ -1346,8 +1353,8 @@ class EquationOfTimeBinder:
             scale = 60.0
         # minimum and maximum value of the time, which must be in the range
         # of -12.0 to +12.0
-        min_hour = numpy.clip(numpy.floor(numpy.min(hah)*scale-padding)/scale,-12.0,12.0)
-        max_hour = numpy.clip(numpy.ceil(numpy.max(hah)*scale+padding)/scale,-12.0,12.0)
+        min_hour = numpy.clip(numpy.floor(numpy.nanmin(hah)*scale-padding)/scale,-12.0,12.0)
+        max_hour = numpy.clip(numpy.ceil(numpy.nanmax(hah)*scale+padding)/scale,-12.0,12.0)
         #avg_hour = sum(hah[:(-2 if self.y_axis.lower()=='lmt' else -1)])/len(hah[:(-2 if self.y_axis.lower()=='lmt' else -1)])
         #loginf('min_hour=%.6fh max_hour=%.6fh avg_hour=%.6fh (%.2fs)' % (min_hour,max_hour,avg_hour,avg_hour*3600))
         # scaling factors
@@ -1355,16 +1362,21 @@ class EquationOfTimeBinder:
         y_factor = height/(min_hour-max_hour)
         # line
         if sunrise_transit_sunset:
-            # sunrise, transit, sunset
-            ys = (
-                ((trh-min_hour)*y_factor+y0,'#ffc000'),
-                ((tth-min_hour)*y_factor+y0,'#ed7d30'),
-                ((tsh-min_hour)*y_factor+y0,'#0070c0')
+            # rise, transit, set
+            data = (
+                (trd*x_factor+x0,(trh-min_hour)*y_factor+y0,'#ffc000'),
+                (ttd*x_factor+x0,(tth-min_hour)*y_factor+y0,'#ed7d30'),
+                (tsd*x_factor+x0,(tsh-min_hour)*y_factor+y0,'#0070c0')
             )
         else:
             # equation of time 
-            ys = (((hah-min_hour)*y_factor+y0,self.colors[2]),)
-            xs = (days-time_ti)*x_factor+x0
+            data = (
+                (
+                    (days-time_ti)*x_factor+x0, 
+                    (hah-min_hour)*y_factor+y0,
+                    self.colors[2]
+                ),
+            )
         # local mean time
         y_lmt = (hms-tz_offset+self.almanac_obj.lon*240)-86400/2
         y_lmt = (y_lmt/3600-min_hour)*y_factor+y0
@@ -1391,12 +1403,12 @@ class EquationOfTimeBinder:
              '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
              '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.5,y0-height+0.5,width-1.0,height-1.0)
         ]
-        if sunrise_transit_sunset:
+        if sunrise_transit_sunset and numpy.nanmin(tsh)>=numpy.nanmax(trh):
             s.append('<path stroke="none" fill="yellow" opacity="0.1" d="')
-            s.append('M%.4f,%.4f' % (x0,ys[1][0][0]))
-            s.extend(['L%.4f,%.4f' % (x*x_factor+x0,y) for x,y in enumerate(ys[0][0])])
-            s.append('\nL%.4f,%.4f\n' % (x0+width,ys[1][0][-1]))
-            s.extend(['L%.4f,%.4f' % (width-x*x_factor+x0,y) for x,y in enumerate(reversed(ys[2][0]))])
+            s.append('M%.4f,%.4f' % (x0,data[1][1][0]))
+            s.extend(['L%.4f,%.4f' % (x*x_factor+x0,y) for x,y in enumerate(data[0][1])])
+            s.append('\nL%.4f,%.4f\n' % (x0+width,data[1][1][-1]))
+            s.extend(['L%.4f,%.4f' % (width-x*x_factor+x0,y) for x,y in enumerate(reversed(data[2][1]))])
             s.append('z" />\n')
         s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
             x0,y0-height,width,height,self.colors[0]))
@@ -1438,10 +1450,12 @@ class EquationOfTimeBinder:
         if self.show_lmt and not sunrise_transit_sunset:
             s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" />\n' % (x0,y_lmt,x0+width,y_lmt,self.colors[3]))
         # lines
-        if (days[1].ut1-days[0].ut1)<1.0: x_factor *= days[1].ut1-days[0].ut1
-        for yy, color in ys:
-            s.append('<path fill="none" stroke="%s" stroke-width="2" d="M%.4f,%.4f' % (color,0.0*x_factor+x0,yy[0]))
-            s.extend(['L%.4f,%.4f' % ((x+1)*x_factor+x0,y) for x,y in enumerate(yy[1:])])
+        dx05 = x_factor*0.1
+        dx15 = x_factor*1.5
+        for xx, yy, color in data:
+            cc = numpy.ediff1d(xx,to_begin=[0.0])
+            s.append('<path fill="none" stroke="%s" stroke-width="%s" d="' % (color,2))
+            s.extend(['%s%.4f,%.4f' % ('L' if dx05<c<dx15 else 'M',x,y) for c,x,y in numpy.transpose((cc,xx,yy))])
             s.append('" />\n')
         # end clipping
         s.append('</g>\n')
