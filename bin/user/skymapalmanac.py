@@ -141,7 +141,7 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         if attr=='analemma':
             return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='eot_diagram':
-            return EquationOfTimeBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
+            return EquationOfTimeBinder(user.skyfieldalmanac.SUN, 'lat', self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
         raise weewx.UnknownType(attr)
 
@@ -166,6 +166,22 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         if 'texts' in almanac_obj.__dict__:
             labels.update({i:j for i,j in almanac_obj.texts.items() if i not in {'planet_names','moon_phases','venus_phases','mercury_phases'}})
         return labels
+
+
+class SkymapSubalmanacType(SkymapAlmanacType):
+
+    def get_almanac_data(self, almanac_obj, attr):
+        """ calculate attribute """
+        if attr=='year_diagram':
+            return EquationOfTimeBinder(
+                        almanac_obj.heavenly_body,
+                        'time of day',
+                        self.config_dict,
+                        self.station_location,
+                        almanac_obj.almanac,
+                        self.get_labels(almanac_obj.almanac)
+                    )
+        raise weewx.UnknownType(attr)
 
 
 class SkymapBinder:
@@ -1230,7 +1246,8 @@ class EquationOfTimeBinder:
     EOT_LABEL = 'Equation of Time'
     Y_AXIS_LABELS = {'solar time':'name(LAT)','lat':'name(LAT)','lmt':'name(LMT)','solar-mean':EOT_LABEL,'mean-solar':EOT_LABEL,'time of day':'Time of day'}
     
-    def __init__(self, config_dict, station_location, almanac_obj, labels):
+    def __init__(self, heavenly_body, y_axis, config_dict, station_location, almanac_obj, labels):
+        self.heavenly_body = heavenly_body
         self.credits = '%s %s' % (labels['©'],station_location)
         self.location = station_location
         self.almanac_obj = almanac_obj
@@ -1243,7 +1260,7 @@ class EquationOfTimeBinder:
         self.noon = True
         self.show_today = True
         self.show_lmt = True
-        self.y_axis = 'lat'
+        self.y_axis = y_axis
         self.html_class = None
         self.id = None
 
@@ -1282,8 +1299,11 @@ class EquationOfTimeBinder:
         t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[0])
         t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(year[1]+86400)
         # time of day (based on year[0] which is midnight civil time)
-        if self.noon or self.y_axis.lower()=='time of day':
-            # equation of time at noon, sunrise-transit-sunset diagram
+        if self.y_axis.lower()=='time of day':
+            # sunrise-transit-sunset diagram
+            hms = 86400/2
+        elif self.noon or self.y_axis.lower()=='time of day':
+            # equation of time at noon
             hms = 86400/2-self.almanac_obj.lon*240+tz_offset-t0.dut1
         else:
             # equation of time at current time
@@ -1296,7 +1316,7 @@ class EquationOfTimeBinder:
         # list of the days of a year
         days = user.skyfieldalmanac.ts.ut1_jd([time_ti.ut1+i for i in range(int(round(year_len,0))+1)])
         # location
-        observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.SUN,False)
+        observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,self.heavenly_body,False)
         # calculate diagram
         if sunrise_transit_sunset:
             # sunrise, transit, sunset
@@ -1306,7 +1326,10 @@ class EquationOfTimeBinder:
             trh = (tr-days)*24
             tth = (tt-days)*24
             tsh = (ts-days)*24
-            hah = [numpy.min(trh),numpy.max(tsh)] 
+            #trh = ((tr-time_ti)%1)*24
+            #tth = ((tt-time_ti)%1)*24
+            #tsh = ((ts-time_ti)%1)*24
+            hah = [numpy.min(trh),numpy.max(trh),numpy.min(tsh),numpy.max(tsh)] 
             padding = 0
             scale = 1.0
         elif self.y_axis.lower()=='lmt':
@@ -1341,6 +1364,7 @@ class EquationOfTimeBinder:
         else:
             # equation of time 
             ys = (((hah-min_hour)*y_factor+y0,self.colors[2]),)
+            xs = (days-time_ti)*x_factor+x0
         # local mean time
         y_lmt = (hms-tz_offset+self.almanac_obj.lon*240)-86400/2
         y_lmt = (y_lmt/3600-min_hour)*y_factor+y0
@@ -1424,7 +1448,7 @@ class EquationOfTimeBinder:
         # caption
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
             0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,
-            self.labels.get('sun','Sun') if sunrise_transit_sunset else self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)
+            self.labels.get(self.heavenly_body,self.heavenly_body.capitalize()) if sunrise_transit_sunset else self.labels.get(EquationOfTimeBinder.EOT_LABEL,EquationOfTimeBinder.EOT_LABEL)
         ))
         if self.y_axis.lower() in {'solar time','lat'}:
             t1 = time.strftime('%X',time.gmtime(round(year[0]+hms+self.almanac_obj.lon*240,0)))
@@ -1571,17 +1595,33 @@ class SkymapService(StdService):
             self.skymap_almanac = SkymapAlmanacType(alm_conf_dict, self.path, engine.stn_info.location)
             # add to the list of almanacs
             weewx.almanac.almanacs.insert(0,self.skymap_almanac)
+            # instantiate the Skymap sub-almanac
+            self.skymap_subalmanac = SkymapSubalmanacType(alm_conf_dict, self.path, engine.stn_info.location)
+            # add to the list of subalmanacs
+            user.skyfieldalmanac.subalmanacs.insert(0,self.skymap_subalmanac)
             logdbg("%s started" % self.__class__.__name__)
         else:
+            self.skymap_almanac = None
+            self.skymap_subalmanac = None
             loginf("Skyfield almanac not enabled. Skipped.")
 
     def shutDown(self):
         """ remove this extension from the almanacs list
         """
-        # find the Skyfield almanac in the list of almanacs
-        idx = weewx.alamanc.almanacs.index(self.skymap_almanac)
-        # remove it from the list
-        del weewx.almanac.almanacs[idx]
+        try:
+            # find the Skymap almanac in the list of almanacs
+            idx = weewx.alamanc.almanacs.index(self.skymap_almanac)
+            # remove it from the list
+            del weewx.almanac.almanacs[idx]
+        except ValueError:
+            pass
+        try:
+            # finde the Skymap sub-almanac in the list of almanacs
+            idx = user.skyfieldalmanac.subalmanacs.index(self.skymap_subalamanac)
+            # remove it from the list
+            del user.skyfieldalmanac.subalmanacs[idx]
+        except ValueError:
+            pass
         # stop thread
         logdbg("%s stopped" % self.__class__.__name__)
 
