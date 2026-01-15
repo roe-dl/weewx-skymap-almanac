@@ -1364,9 +1364,9 @@ class EquationOfTimeBinder:
         if sunrise_transit_sunset:
             # rise, transit, set
             data = (
-                (trd*x_factor+x0,(trh-min_hour)*y_factor+y0,'#ffc000'),
-                (ttd*x_factor+x0,(tth-min_hour)*y_factor+y0,'#ed7d30'),
-                (tsd*x_factor+x0,(tsh-min_hour)*y_factor+y0,'#0070c0')
+                (trd*x_factor+x0,(trh-min_hour)*y_factor+y0,'#ffc000',yr),
+                (ttd*x_factor+x0,(tth-min_hour)*y_factor+y0,'#ed7d30',[True]*len(tth)),
+                (tsd*x_factor+x0,(tsh-min_hour)*y_factor+y0,'#0070c0',ys)
             )
         else:
             # equation of time 
@@ -1374,7 +1374,8 @@ class EquationOfTimeBinder:
                 (
                     (days-time_ti)*x_factor+x0, 
                     (hah-min_hour)*y_factor+y0,
-                    self.colors[2]
+                    self.colors[2],
+                    [True]*len(hah)
                 ),
             )
         # local mean time
@@ -1452,9 +1453,11 @@ class EquationOfTimeBinder:
         # lines
         dx05 = x_factor*0.1
         dx15 = x_factor*1.5
-        for xx, yy, color in data:
-            cc = numpy.ediff1d(xx,to_begin=[0.0])
-            s.append('<path fill="none" stroke="%s" stroke-width="%s" d="' % (color,2))
+        for xx, yy, color, valid in data:
+            cc = numpy.where(
+                          valid,numpy.ediff1d(xx,to_begin=[0.0]),[0.0]*len(xx))
+            s.append(
+             '<path fill="none" stroke="%s" stroke-width="%s" d="' % (color,2))
             s.extend(['%s%.4f,%.4f' % ('L' if dx05<c<dx15 else 'M',x,y) for c,x,y in numpy.transpose((cc,xx,yy))])
             s.append('" />\n')
         # end clipping

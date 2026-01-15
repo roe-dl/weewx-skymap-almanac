@@ -12,12 +12,13 @@ Sky map for WeeWX
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Equation of time](#equation-of-time)
-* [Diagram of visibility](#diagram-of-visibility]
+* [Diagram of visibility](#diagram-of-visibility)
 * [Styling](#styling)
   * [Dark mode of your web site](#dark-mode-of-your-web-site)
   * [General font setting](#general-font-setting)
   * [Special settings](#special-settings)
 * [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javascript)
+* [Creating pure SVG vector graphics files](#creating-pure-svg-vector-graphics-files)
 * [How to check whether this extension is available?](#how-to-check-whether-this-extension-is-available)
 * [Credits](#credits)
 * [Links](#links)
@@ -495,6 +496,19 @@ The following IDs are defined:
 * planet name: a planet on the map (add `_barycenter` for the outer planets)
 * Earth satellite ID: an Earth satellite
 * `HIP`+Hipparcos catalogue number: a single star on the map
+
+## Creating pure SVG vector graphics files
+
+The WeeWX Cheetahgenerator template to create an SVG vector graphics file
+looks like that:
+
+```
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+$almanac.venus.year_diagram
+```
+
+Replace the `$almanac` tag by the one you need.
 
 ## How to check whether this extension is available?
 
