@@ -329,6 +329,9 @@ solar time and the local mean time.
   to). Optional. This is the default
 * `show_lmt`: If `True` mark the average of the solar time. Optional.
   This is the default
+* `show_legend`: If `True` show a legend under the diagram. Optional.
+  Default is `False` for the equation of time diagram and 
+  `True` for the rise-transit-set diagram
 * `y_axis`: Which unit is used for the y axis and how it is labeled:
   * `lat`: Local apparent solar time at the given mean time
   * `lmt`: Local mean solar time at the given apparent solar time
@@ -363,6 +366,8 @@ are available.
 * `height`: Height of the diagram
 * `show_today`: If `True` mark the actual day (the day `$almanac` is bound
   to). Optional. This is the default
+* `show_legend`: If `True` show a legend under the diagram. Optional.
+  Default is `True` if not specified.
 * `location`: String to use as location in the diagram caption. Default
   is the station location as specified in `weewx.conf`.
 * `html_class`: set am HTML class for styling

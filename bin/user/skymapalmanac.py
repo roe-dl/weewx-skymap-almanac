@@ -1260,6 +1260,7 @@ class EquationOfTimeBinder:
         self.noon = True
         self.show_today = True
         self.show_lmt = True
+        self.show_legend = None
         self.y_axis = y_axis
         self.html_class = None
         self.id = None
@@ -1268,7 +1269,7 @@ class EquationOfTimeBinder:
         for key in kwargs:
             if key in {'width','height'}:
                 setattr(self,key,weeutil.weeutil.to_int(kwargs[key]))
-            elif key in {'noon','show_today'}:
+            elif key in {'noon','show_today','show_legend'}:
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
             else:
                 setattr(self,key,kwargs[key])
@@ -1284,12 +1285,13 @@ class EquationOfTimeBinder:
     
     def equation_of_time(self):
         sunrise_transit_sunset = self.y_axis.lower()=='time of day'
+        show_legend = sunrise_transit_sunset if self.show_legend is None else self.show_legend
         # diagram area
         fontsize = self.height/34.5
         x0 = int(fontsize*4.5)
-        y0 = int(self.height-fontsize*2.7)
+        y0 = int(self.height-fontsize*( 2.7+(1.1 if show_legend else 0.0) ))
         width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+2.2+(1.1 if True else 0)))
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if True else 0)+(1.1 if show_legend else 0.0) ))
         # midnight at the beginning of the year
         year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
         year_len = (year[1]-year[0])/86400
@@ -1302,7 +1304,7 @@ class EquationOfTimeBinder:
         if self.y_axis.lower()=='time of day':
             # sunrise-transit-sunset diagram
             hms = 86400/2
-        elif self.noon or self.y_axis.lower()=='time of day':
+        elif self.noon:
             # equation of time at noon
             hms = 86400/2-self.almanac_obj.lon*240+tz_offset-t0.dut1
         else:
@@ -1471,7 +1473,6 @@ class EquationOfTimeBinder:
             t1 = time.strftime('%X',time.gmtime(round(year[0]+hms+self.almanac_obj.lon*240,0)))
             t2 = round(self.almanac_obj.time_ts-(self.almanac_obj.time_ts-year[0])%86400+hms,0)
             t2 = '%s %s' % (time.strftime('%X',time.localtime(t2)),timezone_name(t2,True,self.labels))
-            txt = '{LAT} at {tLMT} {LMT} ({tCivil})'
             txt = '{tLMT} {LMT} ({tCivil}) &#8658; {LAT}'
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
@@ -1496,7 +1497,27 @@ class EquationOfTimeBinder:
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
                 0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,
                 '%s &#8722; %s' % (tz1,tz2)  ))
-        # 
+        # legend
+        if show_legend and sunrise_transit_sunset:
+            if sunrise_transit_sunset:
+                # rise-transit-set diagram
+                t1 = 'Sunrise' if self.heavenly_body=='sun' else 'Rise'
+                t2 = 'Sunset' if self.heavenly_body=='sun' else 'Set'
+                txt = '<tspan fill="%s">%s</tspan> &#8195; <tspan fill="%s">%s</tspan> &#8195; <tspan fill="%s">%s</tspan>' % (
+                          data[0][2],
+                          self.labels.get(t1,t1),
+                          data[1][2],
+                          self.labels.get('Transit','Transit'),
+                          data[2][2],
+                          self.labels.get(t2,t2)
+                      )
+            else:
+                # equation of time diagram
+                txt = '&#8195;'
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+                0.5*self.width,y0+fontsize*3.0,self.colors[0],fontsize*1.1,
+                txt  ))
+        # SVG end
         s.append(SkymapAlmanacType.SVG_END)
         return ''.join(s)
 
@@ -1828,7 +1849,7 @@ class SkymapService(StdService):
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
                     # get language dependent texts used in astronomy
                     x = data.get('Texts',dict())
-                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year'}:
+                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Rise','Transit','Set'}:
                         if key in x:
                             conf[key] = x[key]
                     for key in {'Sun','Moon'}:
