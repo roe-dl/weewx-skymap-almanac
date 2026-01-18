@@ -27,12 +27,17 @@ Aphelion      | Aphélie   | Aphel    | Aphelium   | Afel     | Aphel
 Perigee       | Périgée   | Perigäum | Perigeum   | Perigeum | Perigeum
 Apogee        | Apogée    | Apogäum  | Apogeum    | Apogeum  | Apogeum
 
+In section `[Almanac]`, subsection `[[TZ]]`:
+
+Key        | English       | French        | German     | Dutch       | Czech        | Norwegian
+-----------|---------------|---------------|------------|-------------|--------------|----------
+name(LAT)  | Solar time    | Temps solaire | Sonnenzeit | Zonnetijd   | Sluneční čas | Soltid
+name(LAST) | Sidereal time | Temps sidéral | Sternzeit  | Sterrentijd | Hvězdný čas  | Stjernetid
+
 In section `[Texts]`, subsection `[[Astronomical]]`:
 
 Key = English | French        | German     | Dutch       | Czech        | Norwegian
 --------------|---------------|------------|-------------|--------------|----------
-Solar time    | Temps solaire | Sonnenzeit | Zonnetijd   | Sluneční čas | Soltid
-Sidereal time | Temps sidéral | Sternzeit  | Sterrentijd | Hvězdný čas  | Stjernetid
 Magnitude     | Magnitude     | Magnitude  | Magnitude   | Hvězdná velikost | Magnitude
 First point of Aries | Point Vernal | Frühlingspunkt | Lentepunt | Jarní bod | Værens punkt
 Apparent size | Taille apparente | Scheinbare Größe | | Úhlová velikost | Tilsynelatende størrelse
