@@ -2,7 +2,8 @@
 
 This example replaces the original almanac page of the WeeWX built-in
 Seasons skin by an extended one, that shows additional values, the
-moon phase and moon tilt as a picture and the sky map from this extension.
+moon phase and moon tilt as a picture, the sky map, and diagrams from 
+this extension.
 
 ## Usage
 
@@ -26,6 +27,7 @@ Perihelion    | Périhélie | Perihel  | Perihelium | Perihel  | Perihel
 Aphelion      | Aphélie   | Aphel    | Aphelium   | Afel     | Aphel
 Perigee       | Périgée   | Perigäum | Perigeum   | Perigeum | Perigeum
 Apogee        | Apogée    | Apogäum  | Apogeum    | Apogeum  | Apogeum
+Equation of Time | Équation du temps | Zeitgleichung | Tijdsvereffening | Časová rovnice |
 
 In section `[Almanac]`, subsection `[[TZ]]`:
 
@@ -33,6 +35,8 @@ Key        | English       | French        | German     | Dutch       | Czech   
 -----------|---------------|---------------|------------|-------------|--------------|----------
 name(LAT)  | Solar time    | Temps solaire | Sonnenzeit | Zonnetijd   | Sluneční čas | Soltid
 name(LAST) | Sidereal time | Temps sidéral | Sternzeit  | Sterrentijd | Hvězdný čas  | Stjernetid
+
+Add the name of your local timezone, too.
 
 In section `[Texts]`, subsection `[[Astronomical]]`:
 
@@ -43,3 +47,13 @@ First point of Aries | Point Vernal | Frühlingspunkt | Lentepunt | Jarní bod |
 Apparent size | Taille apparente | Scheinbare Größe | | Úhlová velikost | Tilsynelatende størrelse
 Moon tilt     | Inclinaison   | Neigung    | | | Månetilt
 Distance      | Distance      | Entfernung | Afstand     | Vzdálenost | fra et himmellegeme
+
+## Troubleshooting
+
+You can switch off the almanac extensions by setting `enable=false` in
+section `[Almanac]` in `weewx.conf`. Try switching off the Skymap extension 
+first, and if the error persists, the Skyfield extension, too. Make sure
+to restart WeeWX after changing `weewx.conf`.
+
+This replacement page checks for the availability of the extensions and
+regards it appropriately.

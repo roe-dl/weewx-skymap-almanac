@@ -127,6 +127,24 @@
             <td class="label">$gettext("Total daylight")</td>
             <td class="data">$almanac.sun.visible.long_form<br/>$sun_visible_change.long_form $change_str</td>
           </tr>
+          #if $skyfield_almanac_available
+          <tr>
+            <td class="label">$gettext("Equation of Time")</td>
+            <td class="data">
+            #if $lang=='fr'
+            #set $eot = $almanac.legacy_equation_of_time
+            #else
+            #set $eot = $almanac.equation_of_time
+            #end if
+#if $eot.raw and $eot.raw>=0
+&plus;#slurp
+#else
+&minus;#slurp
+#end if
+$eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
+            </td>
+          </tr>
+          #end if
         </table>
       </div>
       <div class="celestial_body">
@@ -228,7 +246,7 @@
         $almanac.eot_diagram(y_axis='time of day')
       </div>
       <div class="celestial_body">
-        $almanac.eot_diagram(y_axis='solar time')
+        $almanac.eot_diagram(y_axis='solar time',show_legend=True)
       </div>
       <div class="celestial_body">
         $almanac.analemma

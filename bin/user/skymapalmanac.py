@@ -1849,7 +1849,7 @@ class SkymapService(StdService):
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
                     # get language dependent texts used in astronomy
                     x = data.get('Texts',dict())
-                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Rise','Transit','Set'}:
+                    for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Rise','Transit','Set','Equation of Time'}:
                         if key in x:
                             conf[key] = x[key]
                     for key in {'Sun','Moon'}:
