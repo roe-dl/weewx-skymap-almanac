@@ -1,5 +1,5 @@
 # weewx-skymap-almanac
-Sky map for WeeWX
+Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 
 ![sky map](Seasons-example.png)
 
@@ -139,11 +139,15 @@ available if you have special requirements.
 * `show_path_of_moon`: Flag whether to show the path of the Moon during
   the day. Optional. Default `False`.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
-  `['#bbb4ac19','#ffecd5']`. The first value is the color of the dark
+  `'#bbb4ac19','#ffecd5'`. The first value is the color of the dark
   side, the second color that of the sunlit side. For the dark side
   an opacity value can be provided.
+  You can set an URL pointing to a Moon picture for the second color 
+  like `'#bbb4ac19','url(moonpicture.svg)'` to let the sunlit side
+  look like the real Moon. Replace `moonpicture.svg` by the path
+  to the file, which can be SVG, PNG, or JPEG.
 * `analemma_colors`: Colors for `analemma`. Optional. Default
-  `['currentColor','#808080','#7cb5ec','#f7a35c']`
+  `'currentColor','#808080','#7cb5ec','#f7a35c'`
 * `[[[Formats]]]`: Format options. Optional.
   There are reasonable defaults. So you do not need this section at all.
   But if you want to set up something special you can do it here.
@@ -269,6 +273,13 @@ can set the position by using the parameters `x` and `y`.
 
 For styling you can set an HTML class using the `html_class` parameter
 and assign an ID using the `id` parameter.
+
+If you want to use a Moon picture for the sunlit side you can set an URL
+in the `moon_colors` configuration option or the `colors` parameter.
+The value could be `['#bbb4ac19','url(moonpicture.svg)']`, where
+`moonpicture.svg` ist to be replaced by the name or the URL of the
+file, respectively. You can use every full-size picture of the full Moon.
+Besides SVG, PNG and JPEG are possible.
 
 ## Analemma
 
@@ -514,6 +525,9 @@ $almanac.venus.year_diagram
 ```
 
 Replace the `$almanac` tag by the one you need.
+
+If you need PNG files, you may want to have a look at the
+[weewx-svg2png extension](https://github.com/roe-dl/weewx-svg2png).
 
 ## How to check whether this extension is available?
 

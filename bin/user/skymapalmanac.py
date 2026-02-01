@@ -928,7 +928,7 @@ class MoonSymbolBinder:
         self.html_class = None
         self.id = None
     
-    def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None):
+    def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None, colors=None):
         if width:
             if width!='auto'and isinstance(width,str) and width[-1]!='%':
                 self.width = weeutil.weeutil.to_int(width)
@@ -942,6 +942,7 @@ class MoonSymbolBinder:
         if y is not None: self.y = str(y)
         if html_class is not None: self.html_class = html_class
         if id is not None: self.id = id
+        if colors: self.colors = colors
         return self
     
     def __str__(self):
@@ -953,7 +954,8 @@ class MoonSymbolBinder:
             observer = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH] + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
             alt_moon, az_moon, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTHMOON]).apparent().altaz()
             alt_sun, az_sun, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.SUN]).apparent().altaz()
-            alpha = user.skyfieldalmanac.moon_tilt(alt_moon.radians,alt_sun.radians,az_moon.radians-az_sun.radians)
+            alpha = user.skyfieldalmanac.moon_tilt(
+               alt_moon.radians,alt_sun.radians,az_moon.radians-az_sun.radians)
         except (LookupError,TypeError,ValueError,ArithmeticError) as e:
             logerr('error calculating moon tilt angle: %s %s' % (e.__class__.__name__,e))
             alpha = None
@@ -964,13 +966,29 @@ class MoonSymbolBinder:
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(self.almanac_obj.time_ts)
         alpha = self.get_moon_tilt(time_ti) if self.with_tilt else None
         phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.ephemerides,time_ti)
+        # tooltip
         moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
         ptext = self.almanac_obj.moon_phases[moon_index]
         txt = self.labels.get('moon','moon').capitalize()
         txt += '\n%s: %.0f&#176; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         if alpha is not None:
             txt += '\n%s: %.0f&#176;' % (self.labels.get('Moon tilt','Tilt'),alpha*180.0/numpy.pi)
-        return '%s%s%s%s%s%s%s' % (
+        # color of the sunlit side
+        if self.colors[1].startswith('url(') and self.colors[1].endswith(')'):
+            # Moon picture
+            id = 'moonpattern%s' % time.process_time_ns()
+            pattern = self.colors[1][4:-1].strip()
+            pattern = '''  <pattern id="%s" x="-100" y="-100" width="100%%" height="100%%" patternUnits="userSpaceOnUse">
+    <image width="100%%" height="100%%" x="0" y="0" href="%s" />
+  </pattern>
+''' % (id,pattern)
+            colors = [self.colors[0],'url(#%s)' % id]
+        else:
+            # simple color
+            pattern = ''
+            colors = self.colors
+        # create SVG
+        return '%s%s%s%s%s%s%s%s' % (
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (self.width,self.width,
@@ -979,7 +997,8 @@ class MoonSymbolBinder:
             '\n  style="max-width:%s;max-height:%s"' % (self.max_width,self.max_width) if self.max_width else ''),
             '<desc>the Moon, phase %.1f&#176;</desc>\n' % phase.degrees,
             '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
-            moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
+            pattern,
+            moon('moon', txt, 0, 0, 100, None, colors, None, phase,'moon',alpha),
             SkymapAlmanacType.SVG_END
         )
         return s
