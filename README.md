@@ -268,11 +268,15 @@ setting the parameter `max_width` like
 
 To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 
+To hide the line of the Moon axis, use `show_axis=False`.
+
 In case you want to include the moon symbol into another SVG image, you
 can set the position by using the parameters `x` and `y`.
 
 For styling you can set an HTML class using the `html_class` parameter
 and assign an ID using the `id` parameter.
+
+### Pictoral representation of the Moon
 
 If you want to use a Moon picture for the sunlit side you can set an URL
 in the `moon_colors` configuration option or the `colors` parameter.
@@ -280,6 +284,12 @@ The value could be `['#bbb4ac19','url(moonpicture.svg)']`, where
 `moonpicture.svg` ist to be replaced by the name or the URL of the
 file, respectively. You can use every full-size picture of the full Moon.
 Besides SVG, PNG and JPEG are possible.
+
+You don't always see exactly the same part of the Moon's surface due to
+libration. Therefore you can provide a PHP script for the picture that
+observes the `libration_latitude` and `libration_longitude` parameters
+provided when fetching the URL and returns a picture according to that
+libration value.
 
 ## Analemma
 
