@@ -1013,7 +1013,7 @@ class MoonSymbolBinder:
             else:
                 transform = ''
             if lat is not None and lon is not None:
-                pattern = '%s?libration_latitude=%.1f&libration_longitude=%.1f' % (pattern,lat,lon)
+                pattern = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (pattern,lat,lon)
             pattern = '''  <pattern id="%s" x="-100" y="-100" width="100%%" height="100%%" patternUnits="userSpaceOnUse"%s">
     <image width="100%%" height="100%%" x="0" y="0" href="%s" />
   </pattern>
