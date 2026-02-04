@@ -282,8 +282,12 @@ If you want to use a Moon picture for the sunlit side you can set an URL
 in the `moon_colors` configuration option or the `colors` parameter.
 The value could be `['#bbb4ac19','url(moonpicture.svg)']`, where
 `moonpicture.svg` ist to be replaced by the name or the URL of the
-file, respectively. You can use every full-size picture of the full Moon.
-Besides SVG, PNG and JPEG are possible.
+file, respectively. 
+
+You can use every full-size picture of the full Moon.
+Besides SVG, PNG and JPEG are possible. An example of such a picture is
+[the Moon dan gerhards 01](https://freesvg.org/the-moon-dan-gerhards-01).
+Make sure the picture shows the Moon with her axis oriented vertically.
 
 You don't always see exactly the same part of the Moon's surface due to
 libration. Therefore you can provide a PHP script for the picture that
