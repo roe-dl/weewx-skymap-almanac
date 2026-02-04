@@ -139,11 +139,12 @@ available if you have special requirements.
 * `show_path_of_moon`: Flag whether to show the path of the Moon during
   the day. Optional. Default `False`.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
-  `'#bbb4ac19','#ffecd5'`. The first value is the color of the dark
-  side, the second color that of the sunlit side. For the dark side
+  `'#bbb4ac19','#ffecd5','#da6d5e'`. The first value is the color of the dark
+  side, the second color that of the sunlit side, the third the axis color. 
+  For the dark side
   an opacity value can be provided.
   You can set an URL pointing to a Moon picture for the second color 
-  like `'#bbb4ac19','url(moonpicture.svg)'` to let the sunlit side
+  like `'#bbb4ac19','url(moonpicture.svg)','#da6d5e'` to let the sunlit side
   look like the real Moon. Replace `moonpicture.svg` by the path
   to the file, which can be SVG, PNG, or JPEG.
 * `analemma_colors`: Colors for `analemma`. Optional. Default

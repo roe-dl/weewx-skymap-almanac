@@ -993,8 +993,14 @@ class MoonSymbolBinder:
         if lat is not None and lon is not None:
             txt += '\n%s: %.3f&#176; %.3f&#176;' % (self.labels.get('Libration','Libration'),lat,lon)
         if axis is not None and self.show_axis:
-            txt += '\n%s: %.3f&#176;' % (self.labels.get('Axis','Axis'),axis.degrees)
-            axis_line = '<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="#808080" stroke-width="4" stroke-dasharray="20 6 4 6" />' % (110*numpy.sin(axis.radians),110*numpy.cos(axis.radians),-110*numpy.sin(axis.radians),-110*numpy.cos(axis.radians))
+            txt += '\n%s: %.1f&#176;' % (self.labels.get('Axis','Axis'),axis.degrees)
+            axis_line = '<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" stroke-opacity="0.75" stroke-width="4" stroke-dasharray="20 6 4 6" />' % (
+                110*numpy.sin(axis.radians),
+                110*numpy.cos(axis.radians),
+                -110*numpy.sin(axis.radians),
+                -110*numpy.cos(axis.radians),
+                '#da6d5e' if len(self.colors)<3 else self.colors[2]
+            )
         else:
             axis_line = ''
         # color of the sunlit side
