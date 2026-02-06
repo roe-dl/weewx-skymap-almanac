@@ -1004,18 +1004,43 @@ class MoonSymbolBinder:
         else:
             axis_line = ''
         # color of the sunlit side
-        if self.colors[1].startswith('url(') and self.colors[1].endswith(')'):
+        if ((self.colors[1].startswith('url(') or 
+             self.colors[1].startswith('include(')) and 
+             self.colors[1].endswith(')')):
             # Moon picture
             id = 'moonpattern%s' % time.process_time_ns()
-            pattern = self.colors[1][4:-1].strip()
             if axis is not None:
                 transform = ' patternTransform="rotate(%s)' % (-axis.degrees)
             else:
                 transform = ''
-            if lat is not None and lon is not None:
-                pattern = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (pattern,lat,lon)
+            if self.colors[1].startswith('url'):
+                # reference to an SVG, PNG, or JPEG image by URL
+                fn = self.colors[1][4:-1].strip()
+                if lat is not None and lon is not None:
+                    fn = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (fn,lat,lon)
+                pattern = '<image width="100%%" height="100%%" x="0" y="0" href="%s" />' % fn
+            else:
+                # include an SVG file
+                fn = self.colors[1][8:-1].strip()
+                if lat is not None and lon is not None:
+                    if '://' in fn:
+                        # if it is an URL
+                        fn = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (fn,lat,lon)
+                    else:
+                        # if it is a path
+                        fn = fn.format(libration_latitude=lat,libration_longitude=lon)
+                pattern = []
+                incl = False
+                with open(fn,'rt') as f:
+                    for line in f:
+                        if incl:
+                            pattern.append(line)
+                        elif '<svg' in line:
+                            incl = True
+                            pattern.append(line)
+                pattern = ''.join(pattern)
             pattern = '''  <pattern id="%s" x="-100" y="-100" width="100%%" height="100%%" patternUnits="userSpaceOnUse"%s">
-    <image width="100%%" height="100%%" x="0" y="0" href="%s" />
+    %s
   </pattern>
 ''' % (id,transform,pattern)
             colors = [self.colors[0],'url(#%s)' % id]
