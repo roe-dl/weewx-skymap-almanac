@@ -11,6 +11,7 @@ Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
+* [Libration](#libration)
 * [Equation of time](#equation-of-time)
 * [Diagram of visibility](#diagram-of-visibility)
 * [Styling](#styling)
@@ -338,6 +339,26 @@ This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
 
 ![analemma](analemma.png)
+
+## Libration
+
+## Usage
+
+`$almanac.libration_diagram(context='...', ...)`
+
+## Parameters
+
+* `width`: Width of the diagram. Default 280.
+* `height`: Height of the diagram. Default 300.
+* `location`: Location as text (for example the city name). Appears in the 
+  caption of the analemma. An empty string switches it off.
+* `context`: timespan and time of day
+  * `day`: today
+  * `month hourly`: actual month, calculated hourly
+  * `month transits`: actual month, calculated at the time of the Moon transits
+  * `year`: actual year, calculated at the time of the Moon transits
+* `html_class`: set am HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
 
 ## Equation of Time
 
