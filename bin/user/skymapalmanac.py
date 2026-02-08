@@ -1222,17 +1222,7 @@ class AnalemmaBinder:
             s.append('L%.2f,%.2f' % (x,y))
         s.append('z" />\n')
         # seasons
-        format = self.almanac_obj.formatter.time_format_dict.get('ephem_year','%d.%m.')
-        if '%x' in format:
-            format = '%x'
-        else:
-            i,j = format.find("%H"),format.find("%S")
-            if i>0 and format[i-1]=='T': i -= 1
-            if i>=0 and j>i: format = (format[0:i].strip()+" "+format[j+2:].strip()).strip()
-            if '%Y-' in format:
-                format = format.replace('%Y-','')
-            elif '%Y' in format:
-                format = format.replace('%Y','').strip()
+        format = self.time_format_without_year()
         r = fontsize/3
         for x,y,t,w in zip(x_season,y_season,user.skyfieldalmanac.skyfield_time_to_djd(t_season),k_season):
             time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
@@ -1330,15 +1320,36 @@ class AnalemmaBinder:
                 )
         return txt
 
+    def time_format_without_year(self):
+        format = self.almanac_obj.formatter.time_format_dict.get('ephem_year','%d.%m.')
+        if '%x' in format:
+            format = '%x'
+        else:
+            i,j = format.find("%H"),format.find("%S")
+            if i>0 and format[i-1]=='T': i -= 1
+            if i>=0 and j>i: format = (format[0:i].strip()+" "+format[j+2:].strip()).strip()
+            if '%Y-' in format:
+                format = format.replace('%Y-','')
+            elif '%Y' in format:
+                format = format.replace('%Y','').strip()
+        return format
+
 
 class LibrationDiagramBinder(AnalemmaBinder):
+    """ Lunar libration diagram
+    
+        Lunar libration is defined as the location on the Moon in selenographic
+        coordinates that is nearest to the Earth or to the observer on Earth.
+    """
 
     CONTEXTS = {
         # current day
         'day':(weeutil.weeutil.archiveDaySpan,'%x'),
         # current month
         'month':(weeutil.weeutil.archiveMonthSpan,'%B %Y'),
-        # current month
+        # timespan from new moon to new moon
+        'moonmonth':(user.skyfieldalmanac.moonMonthSpan,'%B %Y'),
+        # current year
         'year':(weeutil.weeutil.archiveYearSpan,'%Y'),
     }
     
@@ -1369,14 +1380,15 @@ class LibrationDiagramBinder(AnalemmaBinder):
         timespan = context[0](self.almanac_obj.time_ts)
         t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(timespan[0])
         t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(timespan[1])
-        loginf('libration diagram timespan (%s,%s)' % (t0,t1))
+        logdbg('libration diagram timespan (%s,%s)' % (t0,t1))
+        #loginf('libration diagram timespan (%s,%s)' % (time.strftime('%x %X',time.localtime(timespan[0])),time.strftime('%x %X',time.localtime(timespan[1]))))
         # location
         observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.EARTHMOON,False)
         # get the timestamps to calculate the libration for
         if t is not None:
             # calculate every t seconds
             t = user.skyfieldalmanac.timestamp_to_skyfield_time(
-                [timespan[0]+tt for tt in range(0,timespan[1]-timespan[0],t)])
+                [timespan[0]+tt for tt in range(0,int(timespan[1]-timespan[0]),t)])
         else:
             # Moon transits within the given timespan
             t = skyfield.almanac.find_transits(observer, body, t0, t1)
@@ -1412,8 +1424,19 @@ class LibrationDiagramBinder(AnalemmaBinder):
             lons_phases = (lons_phases.degrees+180.0)%360.0-180.0
             ys_phases = (lats_phases.degrees-min_lat)*y_factor+y0
             xs_phases = (lons_phases-min_lon)*x_factor+x0
+            a_phases = numpy.arctan2(lats_phases.degrees,lons_phases)
+            a = numpy.sqrt(lats_phases.degrees*lats_phases.degrees+lons_phases*lons_phases)
+            loginf('%s' % a)
+            rxt = numpy.abs(a*x_factor)-fontsize*3
+            ryt = numpy.abs(a*y_factor)-fontsize*1.5
+            loginf('x0=%s y0=%s rxt=%s ryt=%s' % (x0,y0,rxt,ryt))
+            a = numpy.arctan2(lats_phases.degrees,lons_phases)
+            loginf('winkel %s %s' % (a*180.0/numpy.pi,k_phases))
+            xs_texts = rxt*numpy.cos(a)-min_lon*x_factor+x0
+            ys_texts = -ryt*numpy.sin(a)-min_lat*y_factor+y0
+            loginf('xs_texts=%s ys_texts=%s' % (xs_texts,ys_texts))
         else:
-            ys_phases = xs_phases = k_phases = []
+            ys_phases = xs_phases = k_phases = t_phases = ys_texts = xs_texts = []
         s = []
         # SVG header
         s.append(AnalemmaBinder.SVG_START % (
@@ -1462,6 +1485,20 @@ class LibrationDiagramBinder(AnalemmaBinder):
                 s.append('<path fill="%s" stroke="none" d="M%.2f,%.2fa%.2f,%.2f 0 0 1 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
                 continue
             s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col))
+        # date of phases
+        if len(xs_texts)and len(ys_texts):
+            format = self.time_format_without_year()
+            for x,y,t in zip(xs_texts,ys_texts,user.skyfieldalmanac.skyfield_time_to_djd(t_phases)):
+                time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
+                time_s = time_vt.format(format)
+                year = time_vt.format("%Y")
+                if format=='%x':
+                    if ('%s-' % year) in time_s:
+                        time_s = time_s.replace('%s-' % year,'')
+                    elif year in time_s:
+                        time_s = time_s.replace(year,'').strip()
+                s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
+                    x,y,self.colors[3],fontsize*1.1,"middle",time_s))
         # libration
         s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[0]))
         for x,y in zip(xs,ys):

@@ -354,6 +354,7 @@ time:
   caption of the analemma. An empty string switches it off.
 * `context`: timespan and time of day
   * `day`: today
+  * `moonmonth hourly`: from new moon to next new moon, calculated hourly
   * `month hourly`: actual month, calculated hourly
   * `month transits`: actual month, calculated at the time of the Moon transits
   * `year`: actual year, calculated at the time of the Moon transits
