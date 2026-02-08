@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Almanac extension to WeeWX using Skyfield
-# Copyright (C) 2025 Johanna Karen Roedenbeck
+# Copyright (C) 2025, 2026 Johanna Karen Roedenbeck
 
 """
 
@@ -60,6 +60,7 @@ except (ImportError,PermissionError):
 from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 from skyfield.magnitudelib import planetary_magnitude
 from skyfield.positionlib import position_of_radec
+from skyfield.trigonometry import position_angle_of
 import skyfield.almanac
 import skyfield.units
 
@@ -142,6 +143,8 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
             return AnalemmaBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='eot_diagram':
             return EquationOfTimeBinder(user.skyfieldalmanac.SUN, 'lat', self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
+        if attr=='libration_diagram':
+            return LibrationDiagramBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
 
         raise weewx.UnknownType(attr)
 
@@ -927,8 +930,9 @@ class MoonSymbolBinder:
         self.y = None
         self.html_class = None
         self.id = None
+        self.show_axis = True
     
-    def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None):
+    def __call__(self, width=None, max_width=None, with_tilt=None, x=None, y=None, html_class=None, id=None, colors=None, show_axis=None):
         if width:
             if width!='auto'and isinstance(width,str) and width[-1]!='%':
                 self.width = weeutil.weeutil.to_int(width)
@@ -942,35 +946,113 @@ class MoonSymbolBinder:
         if y is not None: self.y = str(y)
         if html_class is not None: self.html_class = html_class
         if id is not None: self.id = id
+        if colors: self.colors = colors
+        if show_axis is not None: self.show_axis = weeutil.weeutil.to_bool(show_axis)
         return self
     
     def __str__(self):
         return self.moon_symbol()
     
-    def get_moon_tilt(self, time_ti):
+    def get_moon_tilt(self, time_ti, observer):
         """ calculate moon tilt angle """
         try:
-            observer = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH] + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
             alt_moon, az_moon, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTHMOON]).apparent().altaz()
             alt_sun, az_sun, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.SUN]).apparent().altaz()
-            alpha = user.skyfieldalmanac.moon_tilt(alt_moon.radians,alt_sun.radians,az_moon.radians-az_sun.radians)
+            alpha = user.skyfieldalmanac.moon_tilt(
+               alt_moon.radians,alt_sun.radians,az_moon.radians-az_sun.radians)
         except (LookupError,TypeError,ValueError,ArithmeticError) as e:
-            logerr('error calculating moon tilt angle: %s %s' % (e.__class__.__name__,e))
+            logerr('error calculating Moon tilt angle: %s %s' % (e.__class__.__name__,e))
             alpha = None
         return alpha
     
+    def get_libration(self, time_ti, observer):
+        """ calculate libration """
+        try:
+            frame = user.skyfieldalmanac.frames[user.skyfieldalmanac.EARTHMOON]
+            p = (observer-user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTHMOON]).at(time_ti)
+            lat, lon, dist = p.frame_latlon(frame)
+            lon_degrees = (lon.degrees + 180.0) % 360.0 - 180.0
+            return lat.degrees, lon_degrees, dist.km
+        except (LookupError,TypeError,ValueError,ArithmeticError) as e:
+            logerr('error calculating Moon libration: %s %s' % (e.__class__.__name__,e))
+            return None, None, None
+
     def moon_symbol(self):
         """ create an SVG image of the moon showing her phases """
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(self.almanac_obj.time_ts)
-        alpha = self.get_moon_tilt(time_ti) if self.with_tilt else None
+        observer = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH] + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
+        alpha = self.get_moon_tilt(time_ti, observer) if self.with_tilt else None
         phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.ephemerides,time_ti)
+        lat, lon, dist = self.get_libration(time_ti, observer)
+        axis = user.skyfieldalmanac.get_axis(time_ti, observer, user.skyfieldalmanac.EARTHMOON)
+        # tooltip
         moon_index = int((phase.degrees/360.0 * 8) + 0.5) & 7
         ptext = self.almanac_obj.moon_phases[moon_index]
         txt = self.labels.get('moon','moon').capitalize()
         txt += '\n%s: %.0f&#176; %s' % (self.labels.get('Phase','Phase').capitalize(),phase.degrees,ptext)
         if alpha is not None:
             txt += '\n%s: %.0f&#176;' % (self.labels.get('Moon tilt','Tilt'),alpha*180.0/numpy.pi)
-        return '%s%s%s%s%s%s%s' % (
+        if lat is not None and lon is not None:
+            txt += '\n%s: %.3f&#176; %.3f&#176;' % (self.labels.get('Libration','Libration'),lat,lon)
+        # axis of the selenographic coordinates
+        if axis is not None and self.show_axis and alpha is not None:
+            txt += '\n%s: %.1f&#176;' % (self.labels.get('Axis','Axis'),axis.degrees)
+            axis_line = '<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" stroke-opacity="0.75" stroke-width="4" stroke-dasharray="20 6 4 6" />' % (
+                110*numpy.sin(axis.radians),
+                110*numpy.cos(axis.radians),
+                -110*numpy.sin(axis.radians),
+                -110*numpy.cos(axis.radians),
+                '#da6d5e' if len(self.colors)<3 else self.colors[2]
+            )
+        else:
+            axis_line = ''
+        # color of the sunlit side
+        if ((self.colors[1].startswith('url(') or 
+             self.colors[1].startswith('include(')) and 
+             self.colors[1].endswith(')')):
+            # Moon picture
+            id = 'moonpattern%s' % time.process_time_ns()
+            if axis is not None:
+                transform = ' patternTransform="rotate(%s)' % (-axis.degrees)
+            else:
+                transform = ''
+            if self.colors[1].startswith('url'):
+                # reference to an SVG, PNG, or JPEG image by URL
+                fn = self.colors[1][4:-1].strip()
+                if lat is not None and lon is not None:
+                    fn = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (fn,lat,lon)
+                pattern = '<image width="100%%" height="100%%" x="0" y="0" href="%s" />' % fn
+            else:
+                # include an SVG file
+                fn = self.colors[1][8:-1].strip()
+                if lat is not None and lon is not None:
+                    if '://' in fn:
+                        # if it is an URL
+                        fn = '%s?libration_latitude=%.1f&amp;libration_longitude=%.1f' % (fn,lat,lon)
+                    else:
+                        # if it is a path
+                        fn = fn.format(libration_latitude=lat,libration_longitude=lon)
+                pattern = []
+                incl = False
+                with open(fn,'rt') as f:
+                    for line in f:
+                        if incl:
+                            pattern.append(line)
+                        elif '<svg' in line:
+                            incl = True
+                            pattern.append(line)
+                pattern = ''.join(pattern)
+            pattern = '''  <pattern id="%s" x="-100" y="-100" width="100%%" height="100%%" patternUnits="userSpaceOnUse"%s">
+    %s
+  </pattern>
+''' % (id,transform,pattern)
+            colors = [self.colors[0],'url(#%s)' % id]
+        else:
+            # simple color
+            pattern = ''
+            colors = self.colors
+        # create SVG
+        return ''.join((
             SkymapAlmanacType.SVG_START,
             ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
             SkymapAlmanacType.SVG_START_ATTR % (self.width,self.width,
@@ -979,9 +1061,11 @@ class MoonSymbolBinder:
             '\n  style="max-width:%s;max-height:%s"' % (self.max_width,self.max_width) if self.max_width else ''),
             '<desc>the Moon, phase %.1f&#176;</desc>\n' % phase.degrees,
             '<!-- Created using WeeWX, weewx-skymap-almanac extension, and Skyfield -->\n',
-            moon('moon', txt, 0, 0, 100, None, self.colors, None, phase,'moon',alpha),
+            pattern,
+            moon('moon', txt, 0, 0, 100, None, colors, None, phase,'moon',alpha),
+            axis_line,
             SkymapAlmanacType.SVG_END
-        )
+        ))
         return s
 
 
@@ -1020,13 +1104,13 @@ class AnalemmaBinder:
 
     def __str__(self):
         try:
-            return self.analemma()
+            return self.diagram()
         except Exception as e:
-            logerr("analemma %s %s" % (e.__class__.__name__,e))
-            weeutil.logger.log_traceback(log.error, "analemma ****  ")
+            logerr("%s %s %s" % (self.__class__.__name__,e.__class__.__name__,e))
+            weeutil.logger.log_traceback(log.error, "%s ****  " % self.__class__.__name__)
             return ""
     
-    def analemma(self):
+    def diagram(self):
         """ create an SVG image of an analemma """
         # diagram area
         fontsize = self.height/25
@@ -1133,22 +1217,12 @@ class AnalemmaBinder:
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
             x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Azimuth','Azimuth')))
         # analemma
-        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[1]))
+        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[0]))
         for x,y in zip(xs,ys):
             s.append('L%.2f,%.2f' % (x,y))
         s.append('z" />\n')
         # seasons
-        format = self.almanac_obj.formatter.time_format_dict.get('ephem_year','%d.%m.')
-        if '%x' in format:
-            format = '%x'
-        else:
-            i,j = format.find("%H"),format.find("%S")
-            if i>0 and format[i-1]=='T': i -= 1
-            if i>=0 and j>i: format = (format[0:i].strip()+" "+format[j+2:].strip()).strip()
-            if '%Y-' in format:
-                format = format.replace('%Y-','')
-            elif '%Y' in format:
-                format = format.replace('%Y','').strip()
+        format = self.time_format_without_year()
         r = fontsize/3
         for x,y,t,w in zip(x_season,y_season,user.skyfieldalmanac.skyfield_time_to_djd(t_season),k_season):
             time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
@@ -1217,24 +1291,227 @@ class AnalemmaBinder:
                 # Civil time according to the actual time zone
                 time_vt = ValueHelper(ValueTuple(self.almanac_obj.time_ts,'unix_epoch','group_time'),'ephem_day',formatter=formatter,converter=self.almanac_obj.converter)
                 txt = str(time_vt)
+        txt = self.location_label(txt)
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
+        s.append(SkymapAlmanacType.SVG_END)
+        return "".join(s)
+
+    def location_label(self, txt):
+        formatter = self.almanac_obj.formatter
         if self.show_location:
             # location
+            if txt: txt = '%s, ' % txt
             if self.location:
                 # location described by a name
-                txt = "%s, %s" % (txt,self.location)
+                txt = "%s%s" % (txt,self.location)
             else:
                 # location described by geographic coordinates
                 lat_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lat),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lon_vt = ValueHelper(ValueTuple(abs(self.almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=formatter,converter=self.almanac_obj.converter)
                 lat_s = lat_vt.format("%.4f").replace(' ','&#8199;') # &numsp;
                 lon_s = lon_vt.format("%08.4f")
-                txt = "%s, %s&#8201;%s, %s&#8201;%s" % (
+                txt = "%s%s&#8201;%s, %s&#8201;%s" % (
                     txt,
                     lat_s,
                     formatter.ordinate_names[0 if self.almanac_obj.lat>=0 else 8],
                     lon_s,
                     formatter.ordinate_names[4 if self.almanac_obj.lon>=0 else 12]
                 )
+        return txt
+
+    def time_format_without_year(self):
+        format = self.almanac_obj.formatter.time_format_dict.get('ephem_year','%d.%m.')
+        if '%x' in format:
+            format = '%x'
+        else:
+            i,j = format.find("%H"),format.find("%S")
+            if i>0 and format[i-1]=='T': i -= 1
+            if i>=0 and j>i: format = (format[0:i].strip()+" "+format[j+2:].strip()).strip()
+            if '%Y-' in format:
+                format = format.replace('%Y-','')
+            elif '%Y' in format:
+                format = format.replace('%Y','').strip()
+        return format
+
+
+class LibrationDiagramBinder(AnalemmaBinder):
+    """ Lunar libration diagram
+    
+        Lunar libration is defined as the location on the Moon in selenographic
+        coordinates that is nearest to the Earth or to the observer on Earth.
+    """
+
+    CONTEXTS = {
+        # current day
+        'day':(weeutil.weeutil.archiveDaySpan,'%x'),
+        # current month
+        'month':(weeutil.weeutil.archiveMonthSpan,'%B %Y'),
+        # timespan from new moon to new moon
+        'moonmonth':(user.skyfieldalmanac.moonMonthSpan,'%B %Y'),
+        # current year
+        'year':(weeutil.weeutil.archiveYearSpan,'%Y'),
+    }
+    
+    def __init__(self, config_dict, station_location, almanac_obj, labels):
+        super(LibrationDiagramBinder,self).__init__(config_dict, station_location, almanac_obj, labels)
+        self.context = 'month hourly'
+        self.moon_colors = ['#808080','#ffc000']
+
+    def diagram(self):
+        # diagram area
+        fontsize = self.height/25
+        x0 = int(fontsize*3)
+        y0 = int(self.height-fontsize*2.7)
+        width = int(self.width-x0-fontsize)
+        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
+        # timespan
+        t = self.context.split()
+        context = LibrationDiagramBinder.CONTEXTS[t[0].lower()]
+        if len(t)>1 and t[1].lower()!='transits':
+            if t[1].lower()=='hourly':
+                t = 3600
+            else:
+                t = weeutil.weeutil.to_int(t[1])
+        elif t[0].lower()=='day':
+            t = 3600
+        else:
+            t = None
+        timespan = context[0](self.almanac_obj.time_ts)
+        t0 = user.skyfieldalmanac.timestamp_to_skyfield_time(timespan[0])
+        t1 = user.skyfieldalmanac.timestamp_to_skyfield_time(timespan[1])
+        logdbg('libration diagram timespan (%s,%s)' % (t0,t1))
+        #loginf('libration diagram timespan (%s,%s)' % (time.strftime('%x %X',time.localtime(timespan[0])),time.strftime('%x %X',time.localtime(timespan[1]))))
+        # location
+        observer, horizon, body = user.skyfieldalmanac._get_observer(self.almanac_obj,user.skyfieldalmanac.EARTHMOON,False)
+        # get the timestamps to calculate the libration for
+        if t is not None:
+            # calculate every t seconds
+            t = user.skyfieldalmanac.timestamp_to_skyfield_time(
+                [timespan[0]+tt for tt in range(0,int(timespan[1]-timespan[0]),t)])
+        else:
+            # Moon transits within the given timespan
+            t = skyfield.almanac.find_transits(observer, body, t0, t1)
+        logdbg('libration diagram timestamps %s' % t)
+        # Libration
+        p = (observer-body).at(t)
+        lats, lons, _ = p.frame_latlon(user.skyfieldalmanac.frames[user.skyfieldalmanac.EARTHMOON])
+        lons = (lons.degrees+180.0)%360.0-180.0
+        logdbg('%s %s' % (lats,lons))
+        # Min and max
+        min_lat = numpy.floor(numpy.min(lats.degrees)-0.5)
+        max_lat = numpy.ceil(numpy.max(lats.degrees)+0.5)
+        min_lon = numpy.floor(numpy.min(lons)-0.5)
+        max_lon = numpy.ceil(numpy.max(lons)+0.5)
+        # Scale
+        yscale = 2 if (max_lat-min_lat)>7 else 1
+        min_lat = numpy.floor(min_lat/yscale)*yscale
+        max_lat = numpy.ceil(max_lat/yscale)*yscale
+        xscale = 2 if (max_lon-min_lon)>7 else 1
+        min_lon = numpy.floor(min_lon/xscale)*xscale
+        max_lon = numpy.ceil(max_lon/xscale)*xscale
+        logdbg("libration diagram min_lat=%s max_lat=%s min_lon=%s max_lon=%s" % (min_lat,max_lat,min_lon,max_lon))
+        # convert positions to SVG coordinates
+        x_factor = width/(max_lon-min_lon)
+        y_factor = height/(min_lat-max_lat)
+        ys = (lats.degrees-min_lat)*y_factor+y0
+        xs = (lons-min_lon)*x_factor+x0
+        # Moon phases
+        if 1209600<=(timespan[1]-timespan[0])<=2678400:
+            t_phases, k_phases = skyfield.almanac.find_discrete(t0, t1, skyfield.almanac.moon_phases(user.skyfieldalmanac.ephemerides))
+            p = (observer-body).at(t_phases)
+            lats_phases, lons_phases, _ = p.frame_latlon(user.skyfieldalmanac.frames[user.skyfieldalmanac.EARTHMOON])
+            lons_phases = (lons_phases.degrees+180.0)%360.0-180.0
+            ys_phases = (lats_phases.degrees-min_lat)*y_factor+y0
+            xs_phases = (lons_phases-min_lon)*x_factor+x0
+            a_phases = numpy.arctan2(lats_phases.degrees,lons_phases)
+            a = numpy.sqrt(lats_phases.degrees*lats_phases.degrees+lons_phases*lons_phases)
+            loginf('%s' % a)
+            rxt = numpy.abs(a*x_factor)-fontsize*3
+            ryt = numpy.abs(a*y_factor)-fontsize*1.5
+            loginf('x0=%s y0=%s rxt=%s ryt=%s' % (x0,y0,rxt,ryt))
+            a = numpy.arctan2(lats_phases.degrees,lons_phases)
+            loginf('winkel %s %s' % (a*180.0/numpy.pi,k_phases))
+            xs_texts = rxt*numpy.cos(a)-min_lon*x_factor+x0
+            ys_texts = -ryt*numpy.sin(a)-min_lat*y_factor+y0
+            loginf('xs_texts=%s ys_texts=%s' % (xs_texts,ys_texts))
+        else:
+            ys_phases = xs_phases = k_phases = t_phases = ys_texts = xs_texts = []
+        s = []
+        # SVG header
+        s.append(AnalemmaBinder.SVG_START % (
+            self.width,self.height,0,0,self.width,self.height,
+            '\n   class="%s"' % self.html_class if self.html_class else '',
+            '\n   id="%s"' % self.id if self.id else ''
+        ))
+        # SVG description (always in English, not presented to the user)
+        s.append('<desc>Libration, observed from %.4f&#176; %s, %08.4f&#176; %s, context %s</desc>\n' % (
+            abs(self.almanac_obj.lat),
+            'N' if self.almanac_obj.lat>=0 else 'S',
+            abs(self.almanac_obj.lon),
+            'E' if self.almanac_obj.lon>=0 else 'W',
+            self.context
+        ))
+        s.append('<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n')
+        s.append('<rect x="%s" y="%s" width="%s" height="%s" stroke="%s" stroke-width="1" fill="none" />\n' % (
+            x0,y0-height,width,height,self.colors[0]))
+        # y scale
+        for i in range(int(min_lat),int(max_lat)+yscale,yscale):
+            y = (i-min_lat)*y_factor+y0
+            if int(min_lat)<i<int(max_lat):
+                s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x0,y,x0+width,y,self.colors[1]))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&#176;</text>\n' % (x0-3,y,self.colors[0],fontsize,i))
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
+            x0-2.3*fontsize,y0-0.5*height,fontsize,x0-2.3*fontsize,y0-0.5*height,self.labels.get('Selenographic latitude','Selenographic latitude')))
+        # x scale
+        for i in range(int(min_lon),int(max_lon)+xscale,xscale):
+            x = (i-min_lon)*x_factor+x0
+            s.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s&#176;</text>\n' % (
+                x,y0+fontsize*1.1,self.colors[0],fontsize,i))
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+            x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Selenographic longitude','Selenographic longitude')))
+        # phases
+        r = fontsize*0.75
+        for x,y,k in zip(xs_phases,ys_phases,k_phases):
+            if k==0:
+                col = self.moon_colors[0]
+            elif k==2:
+                col = self.moon_colors[1]
+            else:
+                col = self.moon_colors[0 if k==1 else 1]
+                s.append('<path fill="%s" stroke="none" d="M%.2f,%.2fa%.2f,%.2f 0 0 0 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
+                col = self.moon_colors[1 if k==1 else 0]
+                s.append('<path fill="%s" stroke="none" d="M%.2f,%.2fa%.2f,%.2f 0 0 1 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
+                continue
+            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col))
+        # date of phases
+        if len(xs_texts)and len(ys_texts):
+            format = self.time_format_without_year()
+            for x,y,t in zip(xs_texts,ys_texts,user.skyfieldalmanac.skyfield_time_to_djd(t_phases)):
+                time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
+                time_s = time_vt.format(format)
+                year = time_vt.format("%Y")
+                if format=='%x':
+                    if ('%s-' % year) in time_s:
+                        time_s = time_s.replace('%s-' % year,'')
+                    elif year in time_s:
+                        time_s = time_s.replace(year,'').strip()
+                s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="%s" dominant-baseline="middle">%s</text>\n' % (
+                    x,y,self.colors[3],fontsize*1.1,"middle",time_s))
+        # libration
+        s.append('<path stroke="%s" stroke-width="2" fill="none" d="M%s,%s' % (self.colors[2],xs[0],ys[0]))
+        for x,y in zip(xs,ys):
+            s.append('L%.2f,%.2f' % (x,y))
+        s.append('" />\n')
+        # caption
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*self.width,fontsize*1.5,self.colors[0],fontsize*1.5,self.labels.get("Libration","Libration")))
+        formatter = self.almanac_obj.formatter
+        txt = ""
+        if True:
+            txt = time.strftime(context[1],time.localtime(self.almanac_obj.time_ts))
+        txt = self.location_label(txt)
         s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
             0.5*self.width,fontsize*2.7,self.colors[0],fontsize*1.1,txt))
         s.append(SkymapAlmanacType.SVG_END)
@@ -1735,6 +2012,9 @@ class SkymapService(StdService):
                     'mercury_barycenter':'Merkur',
                     'neptune':'Neptun',
                     'neptune_barycenter':'Neptun',
+                    # Moon coordinates
+                    'Selenographic latitude':'Selenographische Breite',
+                    'Selenographic longitude':'Selenographische Länge',
                 })
             if lang in {'cz','cs'} or lang.startswith('cz_') or lang.startswith('cs_'):
                 conf.update({

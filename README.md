@@ -1,5 +1,5 @@
 # weewx-skymap-almanac
-Sky map for WeeWX
+Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 
 ![sky map](Seasons-example.png)
 
@@ -11,6 +11,7 @@ Sky map for WeeWX
 * [Sky map](#sky-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
+* [Libration](#libration)
 * [Equation of time](#equation-of-time)
 * [Diagram of visibility](#diagram-of-visibility)
 * [Styling](#styling)
@@ -139,11 +140,19 @@ available if you have special requirements.
 * `show_path_of_moon`: Flag whether to show the path of the Moon during
   the day. Optional. Default `False`.
 * `moon_colors`: Colors for `moon_symbol`. Optional. Default
-  `['#bbb4ac19','#ffecd5']`. The first value is the color of the dark
-  side, the second color that of the sunlit side. For the dark side
+  `'#bbb4ac19','#ffecd5','#da6d5e'`. The first value is the color of the dark
+  side, the second color that of the sunlit side, the third the axis color. 
+  For the dark side
   an opacity value can be provided.
+  You can set an URL pointing to a Moon picture for the second color 
+  like `'#bbb4ac19','url(moonpicture.svg)','#da6d5e'` to let the sunlit side
+  look like the real Moon. Replace `moonpicture.svg` by the path
+  to the file, which can be SVG, PNG, or JPEG.
+  Instead of referencing an URL you can also include an SVG file. Use a
+  color list like ``'#bbb4ac19','include(/path/to/moonpicture.svg)','#da6d5e'`
+  for that.
 * `analemma_colors`: Colors for `analemma`. Optional. Default
-  `['currentColor','#808080','#7cb5ec','#f7a35c']`
+  `'currentColor','#808080','#7cb5ec','#f7a35c'`
 * `[[[Formats]]]`: Format options. Optional.
   There are reasonable defaults. So you do not need this section at all.
   But if you want to set up something special you can do it here.
@@ -264,11 +273,40 @@ setting the parameter `max_width` like
 
 To switch off moon tilt, use `$almanac.moon_symbol(with_tilt=False)`.
 
+To hide the line of the Moon axis, use `show_axis=False`.
+
 In case you want to include the moon symbol into another SVG image, you
 can set the position by using the parameters `x` and `y`.
 
 For styling you can set an HTML class using the `html_class` parameter
 and assign an ID using the `id` parameter.
+
+### Pictoral representation of the Moon
+
+If you want to use a Moon picture for the sunlit side you can set an URL
+in the `moon_colors` configuration option or the `colors` parameter.
+The value could be `['#bbb4ac19','url(moonpicture.svg)','#da6d5e']`, where
+`moonpicture.svg` ist to be replaced by the name or the URL of the
+file, respectively. Omit the brackets in the configuration file.
+
+You can use every full-size picture of the full Moon.
+Besides SVG, PNG and JPEG are possible. An example of such an image is
+[the Moon dan gerhards 01](https://freesvg.org/the-moon-dan-gerhards-01).
+Make sure the image shows the Moon with her axis oriented vertically.
+
+You don't always see exactly the same part of the Moon's surface due to
+libration. Therefore you can provide a PHP script for the picture that
+observes the `libration_latitude` and `libration_longitude` parameters
+provided when fetching the URL and returns a picture according to that
+libration value.
+
+In case you experience displaying errors and use an SVG image, you can
+alternatively include the file instead of referencing it. Use
+`['#bbb4ac19','include(/path/to/moonpicture.svg)','#da6d5e']`
+for the color then. If you have different files for different libration
+states you can use `libration_latitude` and `libration_longitude` as
+place holders in the file name, for example
+`/path/to/moonpicture_{libration_latitude:.1f}_{libration_longitude:.1f}.svg`.
 
 ## Analemma
 
@@ -301,6 +339,27 @@ This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
 
 ![analemma](analemma.png)
+
+## Libration
+
+## Usage
+
+`$almanac.libration_diagram(context='...', ...)`
+
+## Parameters
+
+* `width`: Width of the diagram. Default 280.
+* `height`: Height of the diagram. Default 300.
+* `location`: Location as text (for example the city name). Appears in the 
+  caption of the analemma. An empty string switches it off.
+* `context`: timespan and time of day
+  * `day`: today
+  * `moonmonth hourly`: from new moon to next new moon, calculated hourly
+  * `month hourly`: actual month, calculated hourly
+  * `month transits`: actual month, calculated at the time of the Moon transits
+  * `year`: actual year, calculated at the time of the Moon transits
+* `html_class`: set am HTML class for styling
+* `id`: assign an HTML ID to the SVG tag
 
 ## Equation of Time
 
@@ -514,6 +573,9 @@ $almanac.venus.year_diagram
 ```
 
 Replace the `$almanac` tag by the one you need.
+
+If you need PNG files, you may want to have a look at the
+[weewx-svg2png extension](https://github.com/roe-dl/weewx-svg2png).
 
 ## How to check whether this extension is available?
 
