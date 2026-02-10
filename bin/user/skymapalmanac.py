@@ -94,6 +94,15 @@ def to_bool(x, valid_strings=()):
     if x in valid_strings: return x
     return weeutil.weeutil.to_bool(x)
 
+def to_int(x):
+    if isinstance(x,str) and x:
+        if x[-1]=='%':
+            x = x[:-1]
+        else:
+            while x and x[-1].isalpha(): x = x[:-1]
+        x = weeutil.weeutil.to_int(x)
+    return x
+
 def timezone_name(t, abbreviated=True, labels={'TZ':dict()}):
     """ get the timezone name
     
@@ -1073,7 +1082,7 @@ class AnalemmaBinder:
     """ SVG image of analemma """
     
     SVG_START = '''<svg
-  width="%s" height="%s" 
+  width="%s" height="%s"%s
   viewBox="%s %s %s %s"
   xmlns="http://www.w3.org/2000/svg"%s%s>
 '''
@@ -1086,6 +1095,7 @@ class AnalemmaBinder:
         self.colors = config_dict.get('analemma_colors',['currentColor','#808080','#7cb5ec','#f7a35c'])
         self.width = 280
         self.height = 300
+        self.max_width = None
         self.tz = "civil"
         self.show_timestamp = weeutil.weeutil.to_bool(config_dict.get('show_timestamp',True))
         self.show_location = weeutil.weeutil.to_bool(config_dict.get('show_location',True))
@@ -1094,8 +1104,11 @@ class AnalemmaBinder:
 
     def __call__(self, **kwargs):
         for key in kwargs:
-            if key in {'width','height'}:
-                setattr(self,key,weeutil.weeutil.to_int(kwargs[key]))
+            if key in {'width','height','max_width'}:
+                val = kwargs[key]
+                if val and val!='auto' and isinstance(val,str) and val[-1]!='%':
+                    val = weeutil.weeutil.to_int(val)
+                setattr(self,key,val)
             elif key in {'show_timestamp','show_location'}:
                 setattr(self,key,weeutil.weeutil.to_bool(kwargs[key]))
             else:
@@ -1113,11 +1126,13 @@ class AnalemmaBinder:
     def diagram(self):
         """ create an SVG image of an analemma """
         # diagram area
+        viewBoxWidth = to_int(self.width)
+        viewBoxHeight = to_int(self.height)
         fontsize = self.height/25
         x0 = int(fontsize*3)
-        y0 = int(self.height-fontsize*2.7)
-        width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
+        y0 = int(viewBoxHeight-fontsize*2.7)
+        width = int(viewBoxWidth-x0-fontsize)
+        height = int(viewBoxHeight-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
         # midnight at the beginning of the year
         year = weeutil.weeutil.archiveYearSpan(self.almanac_obj.time_ts)
         # time of day
@@ -1183,7 +1198,10 @@ class AnalemmaBinder:
         s = []
         # SVG header
         s.append(AnalemmaBinder.SVG_START % (
-            self.width,self.height,0,0,self.width,self.height,
+            '100%' if self.max_width else self.width,
+            '100%' if self.max_width else self.height,
+            '\n  style="max-width:%s"' % self.max_width if self.max_width else '',
+            0,0,viewBoxWidth,viewBoxHeight,
             '\n   class="%s"' % self.html_class if self.html_class else '',
             '\n   id="%s"' % self.id if self.id else ''
         ))
@@ -1360,11 +1378,13 @@ class LibrationDiagramBinder(AnalemmaBinder):
 
     def diagram(self):
         # diagram area
-        fontsize = self.height/25
+        viewBoxWidth = to_int(self.width)
+        viewBoxHeight = to_int(self.height)
+        fontsize = viewBoxHeight/25
         x0 = int(fontsize*3)
-        y0 = int(self.height-fontsize*2.7)
-        width = int(self.width-x0-fontsize)
-        height = int(self.height-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
+        y0 = int(viewBoxHeight-fontsize*2.7)
+        width = int(viewBoxWidth-x0-fontsize)
+        height = int(viewBoxHeight-fontsize*(2.7+2.2+(1.1 if self.show_timestamp or self.show_location else 0.0)))
         # timespan
         t = self.context.split()
         context = LibrationDiagramBinder.CONTEXTS[t[0].lower()]
@@ -1421,26 +1441,31 @@ class LibrationDiagramBinder(AnalemmaBinder):
             t_phases, k_phases = skyfield.almanac.find_discrete(t0, t1, skyfield.almanac.moon_phases(user.skyfieldalmanac.ephemerides))
             p = (observer-body).at(t_phases)
             lats_phases, lons_phases, _ = p.frame_latlon(user.skyfieldalmanac.frames[user.skyfieldalmanac.EARTHMOON])
+            lats_phases = lats_phases.degrees
             lons_phases = (lons_phases.degrees+180.0)%360.0-180.0
-            ys_phases = (lats_phases.degrees-min_lat)*y_factor+y0
+            ys_phases = (lats_phases-min_lat)*y_factor+y0
             xs_phases = (lons_phases-min_lon)*x_factor+x0
-            a_phases = numpy.arctan2(lats_phases.degrees,lons_phases)
-            a = numpy.sqrt(lats_phases.degrees*lats_phases.degrees+lons_phases*lons_phases)
-            loginf('%s' % a)
+            a_phases = numpy.arctan2(lats_phases,lons_phases)
+            a = numpy.sqrt(lats_phases*lats_phases+lons_phases*lons_phases)
+            #loginf('%s' % a)
             rxt = numpy.abs(a*x_factor)-fontsize*3
             ryt = numpy.abs(a*y_factor)-fontsize*1.5
-            loginf('x0=%s y0=%s rxt=%s ryt=%s' % (x0,y0,rxt,ryt))
-            a = numpy.arctan2(lats_phases.degrees,lons_phases)
-            loginf('winkel %s %s' % (a*180.0/numpy.pi,k_phases))
+            #loginf('x0=%s y0=%s rxt=%s ryt=%s' % (x0,y0,rxt,ryt))
+            a = numpy.arctan2(lats_phases,lons_phases)
+            #loginf('winkel %s %s' % (a*180.0/numpy.pi,k_phases))
             xs_texts = rxt*numpy.cos(a)-min_lon*x_factor+x0
             ys_texts = -ryt*numpy.sin(a)-min_lat*y_factor+y0
-            loginf('xs_texts=%s ys_texts=%s' % (xs_texts,ys_texts))
+            #loginf('xs_texts=%s ys_texts=%s' % (xs_texts,ys_texts))
+            t_phases_vh = [ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter) for t in user.skyfieldalmanac.skyfield_time_to_djd(t_phases)]
         else:
-            ys_phases = xs_phases = k_phases = t_phases = ys_texts = xs_texts = []
+            ys_phases = xs_phases = k_phases = t_phases = ys_texts = xs_texts = t_phases_vh = lats_phases = lons_phases = []
         s = []
         # SVG header
         s.append(AnalemmaBinder.SVG_START % (
-            self.width,self.height,0,0,self.width,self.height,
+            '100%' if self.max_width else self.width,
+            '100%' if self.max_width else self.height,
+            '\n  style="max-width:%s"' % self.max_width if self.max_width else '',
+            0,0,viewBoxWidth,viewBoxHeight,
             '\n   class="%s"' % self.html_class if self.html_class else '',
             '\n   id="%s"' % self.id if self.id else ''
         ))
@@ -1473,25 +1498,35 @@ class LibrationDiagramBinder(AnalemmaBinder):
             x0+0.5*width,y0+fontsize*2.2,self.colors[0],fontsize,self.labels.get('Selenographic longitude','Selenographic longitude')))
         # phases
         r = fontsize*0.75
-        for x,y,k in zip(xs_phases,ys_phases,k_phases):
+        for x,y,k,lat,lon,t in zip(xs_phases,ys_phases,k_phases,lats_phases,lons_phases,t_phases_vh):
+            title = "%s\n%s\n%s: %.1f&#176; %s, %.1f&#176; %s" % (
+                self.almanac_obj.moon_phases[2*k],
+                str(t),
+                self.labels.get('Libration','Libration'),
+                abs(lat),
+                self.almanac_obj.formatter.ordinate_names[0 if lat>=0.0 else 8],
+                abs(lon),
+                self.almanac_obj.formatter.ordinate_names[4 if lon>=0.0 else 12]
+            )
             if k==0:
                 col = self.moon_colors[0]
             elif k==2:
                 col = self.moon_colors[1]
             else:
+                s.append('<g stroke="none"><title>%s</title>' % title)
                 col = self.moon_colors[0 if k==1 else 1]
-                s.append('<path fill="%s" stroke="none" d="M%.2f,%.2fa%.2f,%.2f 0 0 0 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
+                s.append('<path fill="%s" d="M%.2f,%.2fa%.2f,%.2f 0 0 0 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
                 col = self.moon_colors[1 if k==1 else 0]
-                s.append('<path fill="%s" stroke="none" d="M%.2f,%.2fa%.2f,%.2f 0 0 1 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
+                s.append('<path fill="%s" d="M%.2f,%.2fa%.2f,%.2f 0 0 1 %.2f,%.2fz" />' % (col,x,y-r,r,r,0,2*r))
+                s.append('</g>\n')
                 continue
-            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none" />\n' % (x,y,r,col))
+            s.append('<circle cx="%.2f" cy="%.2f" r="%s" fill="%s" stroke="none"><title>%s</title></circle>\n' % (x,y,r,col,title))
         # date of phases
         if len(xs_texts)and len(ys_texts):
             format = self.time_format_without_year()
-            for x,y,t in zip(xs_texts,ys_texts,user.skyfieldalmanac.skyfield_time_to_djd(t_phases)):
-                time_vt = ValueHelper(ValueTuple(t,'dublin_jd','group_time'),'ephem_year',formatter=self.almanac_obj.formatter,converter=self.almanac_obj.converter)
-                time_s = time_vt.format(format)
-                year = time_vt.format("%Y")
+            for x,y,t in zip(xs_texts,ys_texts,t_phases_vh):
+                time_s = t.format(format)
+                year = t.format("%Y")
                 if format=='%x':
                     if ('%s-' % year) in time_s:
                         time_s = time_s.replace('%s-' % year,'')
@@ -2040,7 +2075,10 @@ class SkymapService(StdService):
                     'uranus':'Uran',
                     'uranus_barycenter':'Uran',
                     'neptune':'Neptun',
-                    'neptune_barycenter':'Neptun'
+                    'neptune_barycenter':'Neptun',
+                    # Moon coordinates
+                    'Selenographic latitude':'Selenografická šířka',
+                    'Selenographic longitude':'Selenografická délka',
                 })
             if lang=='nl' or lang.startswith('nl_'):
                 conf.update({
