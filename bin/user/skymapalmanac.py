@@ -61,6 +61,7 @@ from skyfield.constants import DAY_S, DEG2RAD, RAD2DEG
 from skyfield.magnitudelib import planetary_magnitude
 from skyfield.positionlib import position_of_radec
 from skyfield.trigonometry import position_angle_of
+from skyfield.framelib import ecliptic_frame
 import skyfield.almanac
 import skyfield.units
 
@@ -528,6 +529,7 @@ class SkymapBinder:
         ordinates = almanac_obj.formatter.ordinate_names
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
         observer = SkymapBinder.get_observer(almanac_obj)
+        earth = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH]
         station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
         width = self.width if self.width else 800
         s = [
@@ -699,6 +701,7 @@ class SkymapBinder:
                     short_label = body_eph.name[i+5:].split(')')[0].strip()
                 magnitude = None
                 constellation_name = ''
+                ecliptic_coords = ''
             else:
                 # apparent position
                 apparent = observer.at(time_ti).observe(body_eph).apparent()
@@ -731,6 +734,9 @@ class SkymapBinder:
                         constellation_name = ''
                 else:
                     constellation_name = ''
+                # geocentric ecliptic coordinates
+                elat, elon, _ = earth.at(time_ti).observe(body_eph).apparent().frame_latlon(ecliptic_frame)
+                ecliptic_coords = '\n%s: &beta;=%.4f&#176; &lambda;=%.4f&#176;' % (self.get_text('ecliptical').capitalize(),elat.degrees,elon.degrees)
             alt, az, distance = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
             if alt.degrees>=0:
                 ra, dec, _ = apparent.radec('date')
@@ -740,11 +746,12 @@ class SkymapBinder:
                 # horizontal coordinate system: altitude, azimuth
                 # rotierendes äquatoriales Koordinatensystem: ra dec
                 # ortsfestes äquatoriales Koordindatensystem: ha dec
-                txt = '%s\n%s=%.1f&#176; %s=%.1f&#176; %s\nra=%.1fh dec=%.1f&#176;%s' % (
+                txt = '%s\n%s=%.1f&#176; %s=%.1f&#176; %s\n%s: ra=%.1fh dec=%.1f&#176;%s%s' % (
                     label,
                     self.get_text('Altitude'),alt.degrees,
                     self.get_text('Azimuth'),az.degrees,ordinates[dir],
-                    ra.hours,dec.degrees,
+                    self.get_text('equatorial').capitalize(),ra.hours,dec.degrees,
+                    ecliptic_coords,
                     constellation_name)
                 phase = None
                 if body=='sun':
@@ -989,7 +996,8 @@ class MoonSymbolBinder:
     def moon_symbol(self):
         """ create an SVG image of the moon showing her phases """
         time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(self.almanac_obj.time_ts)
-        observer = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH] + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
+        earth = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH]
+        observer = earth + wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
         alpha = self.get_moon_tilt(time_ti, observer) if self.with_tilt else None
         phase = skyfield.almanac.moon_phase(user.skyfieldalmanac.ephemerides,time_ti)
         lat, lon, dist = self.get_libration(time_ti, observer)
@@ -2042,6 +2050,8 @@ class SkymapService(StdService):
                         'CEST':'MESZ',
                         'name(CET)':'mitteleuropäische Normalzeit',
                     },
+                    'ecliptical':'ekliptisch',
+                    'equatorial':'äquatorial',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -2068,6 +2078,8 @@ class SkymapService(StdService):
                         'CET':"SEČ",
                         'name(CET)':"středoevropský čas",
                     },
+                    'ecliptical':'ekliptický',
+                    'equatorial':'rovníkový',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'venus':'Venuše',
