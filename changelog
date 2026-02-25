@@ -8,7 +8,7 @@
 0.3 04dec2025
 * if current working directory is not available
 * docu how to check for the availability of this extension
-0.4 08jan2025
+0.4 08jan2026
 * fix #2
 * add HTML class and id attribute
 * example skin
@@ -21,7 +21,7 @@
 * french localization thanks to user Jterrettaz
 * fix analemma midnight bug #5
 * equation of time
-0.5
+0.5 25feb2026
 * revised internationalization
 * diagram of visibility of heavenly bodies
 * legend in year diagram

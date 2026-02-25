@@ -291,7 +291,7 @@ file, respectively. Omit the brackets in the configuration file.
 
 You can use every full-size picture of the full Moon.
 Besides SVG, PNG and JPEG are possible. An example of such an image is
-[the Moon dan gerhards 01](https://freesvg.org/the-moon-dan-gerhards-01).
+[the Moon dan gerhards 01](https://openclipart.org/detail/118795/the-moon-dan-gerhards-01).
 Make sure the image shows the Moon with her axis oriented vertically.
 
 You don't always see exactly the same part of the Moon's surface due to
@@ -609,4 +609,5 @@ element level after `$almanac` only.
 * [Liste der hellsten Sterne](https://de.wikipedia.org/wiki/Liste_der_hellsten_Sterne)
 * [Andrea K. Myers-Beaghton et al.: The moon tilt illusion](https://www.seas.upenn.edu/~amyers/MoonPaperOnline.pdf)
 * [Karlheinz Schott (&dagger;): "Falsche" Mondneigung - Wohin zeigt die Mondsichel?](https://falsche-mondneigung.jimdofree.com/b-geometrische-darstellung-und-berechnung/) (german)
-* [Example page](https://www.woellsdorf-wetter.de/maps/skymap.html)
+* [Skymap example page](https://www.woellsdorf-wetter.de/maps/skymap.html)
+* [Moon symbol example page](https://www.woellsdorf-wetter.de/clock/moon.html?longitude=Woellsdorf)
