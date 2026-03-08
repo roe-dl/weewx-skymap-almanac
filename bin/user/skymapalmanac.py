@@ -33,16 +33,19 @@
     Thin space                &#8201;
 """
 
-VERSION="0.5"
+VERSION="0.6"
 
 import time
 import os.path
 import configobj
+# `pathlib` is required for `get_lang_dict`
+from pathlib import Path
 
 import weewx
 from weewx.engine import StdService
 from weewx.units import ValueTuple, ValueHelper
 import weewx.almanac
+import weewx.reportengine
 import weeutil.weeutil
 import user.skyfieldalmanac
 
@@ -81,14 +84,14 @@ def logerr(msg):
 
 def _get_config(config_dict):
     """ get almanac configuration """
-    conf_dict = config_dict.get('Almanac',configobj.ConfigObj())
-    enable_skyfield = weeutil.weeutil.to_bool(conf_dict.get('Skyfield',configobj.ConfigObj()).get('enable',True))
-    conf_dict = conf_dict.get('Skymap',configobj.ConfigObj())
+    conf_dict = config_dict.get('Almanac',configobj.ConfigObj(interpolation=False))
+    enable_skyfield = weeutil.weeutil.to_bool(conf_dict.get('Skyfield',configobj.ConfigObj(interpolation=False)).get('enable',True))
+    conf_dict = conf_dict.get('Skymap',configobj.ConfigObj(interpolation=False))
     alm_conf_dict = weeutil.config.accumulateLeaves(conf_dict)
     alm_conf_dict['enable'] = weeutil.weeutil.to_bool(conf_dict.get('enable',True)) and enable_skyfield
     alm_conf_dict['log_success'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_success',True))
     alm_conf_dict['log_failure'] = weeutil.weeutil.to_bool(alm_conf_dict.get('log_failure',True))
-    alm_conf_dict['Formats'] = conf_dict.get('Formats',configobj.ConfigObj())
+    alm_conf_dict['Formats'] = conf_dict.get('Formats',configobj.ConfigObj(interpolation=False))
     return alm_conf_dict
 
 def to_bool(x, valid_strings=()):
@@ -1941,7 +1944,7 @@ class SkymapService(StdService):
         """ init this extension """
         super(SkymapService,self).__init__(engine, config_dict)
         # directory to save ephemeris and IERS files
-        sqlite_root = config_dict.get('DatabaseTypes',configobj.ConfigObj()).get('SQLite',configobj.ConfigObj()).get('SQLITE_ROOT','.')
+        sqlite_root = config_dict.get('DatabaseTypes',configobj.ConfigObj(interpolation=False)).get('SQLite',configobj.ConfigObj(interpolation=False)).get('SQLITE_ROOT','.')
         self.path = os.path.join(sqlite_root,'skyfield')
         # configuration
         alm_conf_dict = _get_config(config_dict)
@@ -2002,7 +2005,7 @@ class SkymapService(StdService):
         languages = []
         lang_dict = dict()
         # Report configuration section
-        rpt_conf_dict = config_dict.get('StdReport',configobj.ConfigObj())
+        rpt_conf_dict = config_dict.get('StdReport',configobj.ConfigObj(interpolation=False))
         # Skins directory
         skin_root = rpt_conf_dict.get('SKIN_ROOT')
         skin_root = os.path.join(config_dict.get('WEEWX_ROOT','.'),skin_root)
@@ -2038,6 +2041,7 @@ class SkymapService(StdService):
                     'Apparent size':'Scheinbare Größe',
                     'In constellation':'Im Sternbild',
                     'Moon tilt':'Neigung',
+                    'Phase angle':'Phasenwinkel',
                     'Equation of Time':'Zeitgleichung',
                     '{tLMT} {LMT} ({tCivil}) &#8658; {LAT}':'{LAT} um {tLMT} Uhr {LMT} ({tCivil})',
                     '{tLAT} {LAT} &#8658; {LMT}':'{LMT} um {tLAT} Uhr {LAT}',
@@ -2168,12 +2172,10 @@ class SkymapService(StdService):
                     },
             })
             # get language dependent words out of the built-in Seasons skin for language `lang`
-            skin = os.path.join(skin_root,'Seasons','lang')
+            skin = Path(skin_root,'Seasons','lang')
             try:
-                data = configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0].split('_')[0]))
+                data = weewx.reportengine.get_lang_dict(lang, skin, 'Seasons')
                 if data:
-                    if '_' in lang and os.path.isfile('%s.conf' % lang.split('.')[0]):
-                        data.update(configobj.ConfigObj(os.path.join(skin,'%s.conf' % lang.split('.')[0])))
                     # used for determining skin language
                     conf['hour'] = data.get('Units',dict()).get('Labels',dict()).get('hour')
                     conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
@@ -2188,7 +2190,7 @@ class SkymapService(StdService):
                     # The language files of the Seasons skin contain an "Astronomical" section
                     astro = x.get('Astronomical',dict())
                     # Astronomical altitude and magnitude
-                    for key in {'Altitude','Magnitude','First point of Aries','Apparent size','Moon tilt','Distance'}:
+                    for key in {'Altitude','Magnitude','First point of Aries','Apparent size','Moon tilt','Distance','Phase angle'}:
                         if astro.get(key):
                             conf[key] = astro.get(key)
                     # Names of the planets

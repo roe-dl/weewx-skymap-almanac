@@ -67,7 +67,7 @@
           </tr>
           <tr>
             <td class="label">$gettext("Azimuth")</td>
-            <td class="data">$almanac.sun.azimuth.format("%03.1f")</td>
+            <td class="data">$almanac.sun.azimuth.format("%03.1f") $almanac.sun.azimuth.ordinal_compass</td>
           </tr>
           <tr>
             <td class="label">$pgettext("Astronomical", "Altitude")</td>
@@ -81,6 +81,21 @@
             <td class="label">$gettext("Declination")</td>
             <td class="data">$almanac.sun.topo_dec.format("%.1f")</td>
           </tr>
+          #if $skyfield_almanac_available 
+          #set $ecliptic = $almanac.sun.topo_ecliptic
+          <tr>
+            <td class="label">$gettext("Ecliptic longitude")</td>
+            <td class="data">$ecliptic.longitude.format("%.1f")</td>
+          </tr>
+          <tr>
+            <td class="label">$gettext("Ecliptic latitude")</td>
+            <td class="data">$ecliptic.latitude.format("%.2f")</td>
+          </tr>
+          <tr>
+            <td class="label">$gettext("In constellation")</td>
+            <td class="data">$almanac.sun.constellation</td>
+          </tr>
+          #end if
           #if $almanac.next_equinox.raw < $almanac.next_solstice.raw
             ## The equinox is before the solstice. Display them in order.
             <tr>
@@ -175,7 +190,7 @@ $eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
           <tr><td class="label">&nbsp;</td><td class="data">&nbsp;</td></tr>
           <tr>
             <td class="label">$gettext("Azimuth")</td>
-            <td class="data">$almanac.moon.azimuth.format("%.1f")</td>
+            <td class="data">$almanac.moon.azimuth.format("%.1f") $almanac.moon.azimuth.ordinal_compass</td>
           </tr>
           <tr>
             <td class="label">$pgettext("Astronomical", "Altitude")</td>
@@ -189,6 +204,21 @@ $eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
             <td class="label">$gettext("Declination")</td>
             <td class="data">$almanac.moon.topo_dec.format("%.1f")</td>
           </tr>
+          #if $skyfield_almanac_available 
+          #set $ecliptic = $almanac.moon.topo_ecliptic
+          <tr>
+            <td class="label">$gettext("Ecliptic longitude")</td>
+            <td class="data">$ecliptic.longitude.format("%.1f")</td>
+          </tr>
+          <tr>
+            <td class="label">$gettext("Ecliptic latitude")</td>
+            <td class="data">$ecliptic.latitude.format("%.2f")</td>
+          </tr>
+          <tr>
+            <td class="label">$gettext("In constellation")</td>
+            <td class="data">$almanac.moon.constellation</td>
+          </tr>
+          #end if
           #if $almanac.next_full_moon.raw < $almanac.next_new_moon.raw
             <tr>
               <td class="label">$gettext("Full moon")</td>
@@ -234,6 +264,12 @@ $eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
             <td class="data">$almanac.moon_phase<br/>
               $almanac.moon_fullness% $gettext("full")</td>
           </tr>
+          #if $skyfield_almanac_available 
+          <tr>
+            <td class="label">$pgettext("Astronomical","Moon tilt")</td>
+            <td class="data">$almanac.moon.moon_tilt</td>
+          </tr>
+          #end if
         </table>
       </div>
       #if $skymap_almanac_available
@@ -250,6 +286,9 @@ $eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
       </div>
       <div class="celestial_body">
         $almanac.analemma
+      </div>
+      <div class="celestial_body">
+        $almanac.libration_diagram(context='month 1800')
       </div>
       #end if
     </div>

@@ -20,6 +20,7 @@ Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
   * [Special settings](#special-settings)
 * [Changing visibility of elements by JavaScript](#changing-visibility-of-elements-by-javascript)
 * [Creating pure SVG vector graphics files](#creating-pure-svg-vector-graphics-files)
+* [Localization](#localization)
 * [How to check whether this extension is available?](#how-to-check-whether-this-extension-is-available)
 * [Credits](#credits)
 * [Links](#links)
@@ -291,7 +292,8 @@ file, respectively. Omit the brackets in the configuration file.
 
 You can use every full-size picture of the full Moon.
 Besides SVG, PNG and JPEG are possible. An example of such an image is
-[the Moon dan gerhards 01](https://openclipart.org/detail/118795/the-moon-dan-gerhards-01).
+[the moon dan gerhards 01](https://openclipart.org/detail/118795/the-moon-dan-gerhards-01)
+or [full moon dan gerhards 01](https://openclipart.org/detail/118813/full-moon-dan-gerhards-01).
 Make sure the image shows the Moon with her axis oriented vertically.
 
 You don't always see exactly the same part of the Moon's surface due to
@@ -577,6 +579,59 @@ Replace the `$almanac` tag by the one you need.
 If you need PNG files, you may want to have a look at the
 [weewx-svg2png extension](https://github.com/roe-dl/weewx-svg2png).
 
+## Localization
+
+To adapt skins to local languages, WeeWX uses language files. These files
+include an `[Almanac]` section that contains at least one key called 
+`moon_phases`. This WeeWX almanac extension also uses the value of that key 
+to name the moon phases.
+
+The same applies to compass directions which come from `directions` in
+section `[Units]`, sub-section `[[Ordinates]]`.
+
+If there are no language files in your skin, look into `skin.conf` for
+those sections and keys. If even there they are missing, they could be
+found within `weewx.conf` in section `StdReport`.
+
+The maps and diagrams provided by this extension use additional keys.
+You have to put them into the language files of your skin in order to
+get localized texts.
+
+* `planet_names`: List of the names of the planets of the solar system, sorted by their distance to the Sun, including Earth and Pluto.
+* `First point of Aries`
+* `Distance`: Label for the distance of heavenly bodies
+* `Magnitude`: Label for the magnitude of stars
+* `In constellation`: Label for the constellation the heavenly body is in.
+* `ecliptical`: Label for ecliptic coordinates
+* `equatorial`: Label for equatorial coordinates
+* `Altitude`: Label for the astronomical altitude
+* `Azimuth`: Label for azimuth
+* `Phase`: Label for the phase of the Moon 
+* `Phase angle`: Label for the phase angle of Mercury and Venus
+* `Apparent size`: Label for the apparent size of a heavenly body
+* `Position`: Label for the position of a satellite
+* `Data source`: Label for the data source
+* `Moon tilt`: Label for the moon tilt
+* `Libration`: Lable for the libration coordinates
+* `Analemma`: The caption of the analemma diagram
+* `local mean time`: 'local mean time' in local language
+* `Selenographic latitude`: Axis description
+* `Selenographic longitude`: Axis description
+* `Equation of Time`: The caption of the equation of time diagram
+* `{tLMT} {LMT} ({tCivil}) &#8658; {LAT}`: Sub-caption of the equation of time diagram
+* `{tLAT} {LAT} &#8658; {LMT}`: Another Sub-caption of the equation of time diagram
+* `Sunrise`, `Sunset`, `Rise`, `Set`, `Transit`: Names of the lines in the visibility diagram
+
+Put the names of the timezones in section `[Almanac]`, sub-section `[[TZ]]`:
+
+* `LAT`: localized abbrevation of the local apparent solar time
+* `name(LAT)`: localized name of the local apparent solar time
+* `name(LAST)`: localized name of the local apparent sidereal time
+* `name(LMT)`: localized name of the local mean solar time
+* `CET`: localized abbrevation of the Central European Time (Replace by your timezone)
+* `CEST`: localized abbreation of the Central European Summer Time (Replace by your timezone)
+* `name(CET)`: localized name of the Central European Time (Replace by your timezone)
+
 ## How to check whether this extension is available?
 
 If you write a skin, you may want to know whether the user installed and
@@ -611,3 +666,4 @@ element level after `$almanac` only.
 * [Karlheinz Schott (&dagger;): "Falsche" Mondneigung - Wohin zeigt die Mondsichel?](https://falsche-mondneigung.jimdofree.com/b-geometrische-darstellung-und-berechnung/) (german)
 * [Skymap example page](https://www.woellsdorf-wetter.de/maps/skymap.html)
 * [Moon symbol example page](https://www.woellsdorf-wetter.de/clock/moon.html?longitude=Woellsdorf)
+* [Search subdirectory lang for additional translation files](https://github.com/weewx/weewx/commit/9a4c1558c1337221398e44612fe408e1542991e2) (2026-02-28)
