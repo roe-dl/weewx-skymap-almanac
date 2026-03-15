@@ -103,6 +103,8 @@ available if you have special requirements.
         show_ecliptic = true
         # flag whether to show the constellation lines between the stars
         show_constellations = true
+        # optional list of localization sources
+        additional_localization_sources = internal, Seasons
         # format options
         [[[Formats]]]
             stars = mag, '#ff0'
@@ -154,6 +156,9 @@ available if you have special requirements.
   for that.
 * `analemma_colors`: Colors for `analemma`. Optional. Default
   `'currentColor','#808080','#7cb5ec','#f7a35c'`
+* `additional_localization_sources`: Optional list of additional sources
+  of localized words. In general you do not need this key. If present,
+  the listed sources are read in order. Default `internal, Seasons`.
 * `[[[Formats]]]`: Format options. Optional.
   There are reasonable defaults. So you do not need this section at all.
   But if you want to set up something special you can do it here.
@@ -334,7 +339,11 @@ defined to adjust the layout:
     of time. Often an analemma is provided for 12:00:00 Local Mean Time.
   * `UTC`: UTC
   * `civil`: The local time as used by WeeWX. This is the default.
-* `html_class`: set am HTML class for styling
+* `caption`: Diagram caption. Default is the localized word for `Analemma`.
+* `y_axis_label`: Y axis label. Default is the localized word for `Altitude`.
+* `x_axis_label`: X axis label. Default is the localized word for `Azimuth`.
+* `lmt_name`: In case of `tz='LMT'` how to mark Local Mean Time. Default is the localized name or abbrevation of it.
+* `html_class`: set an HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 
 This is the analemma at the Royal Observatory Greenwich at high noon mean
@@ -360,6 +369,9 @@ time:
   * `month hourly`: actual month, calculated hourly
   * `month transits`: actual month, calculated at the time of the Moon transits
   * `year`: actual year, calculated at the time of the Moon transits
+* `caption`: Diagram caption. Default is the localized word for `Libration`.
+* `y_axis_label`: Y axis label. Default is the localized word for `Selenographic latitude`.
+* `x_axis_label`: X axis label. Default is the localized word for `Selenographic longitude`.
 * `html_class`: set am HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 
@@ -595,32 +607,44 @@ found within `weewx.conf` in section `StdReport`.
 
 The maps and diagrams provided by this extension use additional keys.
 You have to put them into the language files of your skin in order to
-get localized texts.
+get localized texts. Put them in sub-section `[[Astronomcial]]` of
+section `[Texts]`.
 
-* `planet_names`: List of the names of the planets of the solar system, sorted by their distance to the Sun, including Earth and Pluto.
 * `First point of Aries`
 * `Distance`: Label for the distance of heavenly bodies
 * `Magnitude`: Label for the magnitude of stars
 * `In constellation`: Label for the constellation the heavenly body is in.
 * `ecliptical`: Label for ecliptic coordinates
 * `equatorial`: Label for equatorial coordinates
-* `Altitude`: Label for the astronomical altitude
-* `Azimuth`: Label for azimuth
-* `Phase`: Label for the phase of the Moon 
 * `Phase angle`: Label for the phase angle of Mercury and Venus
 * `Apparent size`: Label for the apparent size of a heavenly body
 * `Position`: Label for the position of a satellite
 * `Data source`: Label for the data source
 * `Moon tilt`: Label for the moon tilt
-* `Libration`: Lable for the libration coordinates
+* `Libration`: Label for the libration coordinates
 * `Analemma`: The caption of the analemma diagram
-* `local mean time`: 'local mean time' in local language
 * `Selenographic latitude`: Axis description
 * `Selenographic longitude`: Axis description
 * `Equation of Time`: The caption of the equation of time diagram
 * `{tLMT} {LMT} ({tCivil}) &#8658; {LAT}`: Sub-caption of the equation of time diagram
 * `{tLAT} {LAT} &#8658; {LMT}`: Another Sub-caption of the equation of time diagram
+
+Some labels are pre-defined in most skins:
+
 * `Sunrise`, `Sunset`, `Rise`, `Set`, `Transit`: Names of the lines in the visibility diagram
+* `Altitude`: Label for the astronomical altitude
+* `Azimuth`: Label for azimuth
+* `Declination`, `Right ascension`: Names of the coordinates of the equatorial coordinate system
+* `Moon Phase`, `Phase`: Label for the phase of the Moon 
+
+The names of heavenly bodies and phases reside in section `[Almanac]`:
+
+* `moon_phases`: Phases of the Moon, generally pre-defined in all skins
+* `venus_phases`: Phases of Venus
+* `mercury_phases`: Phases of Mercury
+* `planet_names`: List of the names of the planets of the solar system, sorted by their distance to the Sun, including Earth and Pluto.
+* `sun`: local name of the Sun
+* `moon`: local name of the Moon
 
 Put the names of the timezones in section `[Almanac]`, sub-section `[[TZ]]`:
 
@@ -631,6 +655,9 @@ Put the names of the timezones in section `[Almanac]`, sub-section `[[TZ]]`:
 * `CET`: localized abbrevation of the Central European Time (Replace by your timezone)
 * `CEST`: localized abbreation of the Central European Summer Time (Replace by your timezone)
 * `name(CET)`: localized name of the Central European Time (Replace by your timezone)
+
+Put the names of the constellations in section `[Almanac]`, sub-section
+`[[Constellations]]`.
 
 ## How to check whether this extension is available?
 
