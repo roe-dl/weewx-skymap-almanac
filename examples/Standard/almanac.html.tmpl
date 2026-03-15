@@ -1,0 +1,383 @@
+## Copyright 2009-2021 Tom Keffer
+## Distributed under terms of GPLv3.  See LICENSE.txt for your rights.
+#errorCatcher Echo
+#encoding UTF-8
+##
+<!DOCTYPE html>
+<html lang="$lang">
+  <head>
+    ## Specifying an encoding of UTF-8 is usually safe:
+    <meta charset="UTF-8">
+    <title>$station.location $gettext("Today's Almanac")</title>
+    <link rel="stylesheet" type="text/css" href="weewx.css"/>
+    <link rel="icon" type="image/png" href="favicon.ico" />
+    #if $station.station_url
+    <link rel="canonical" href="$station.station_url/$filename" />
+    #end if
+    <script type="text/javascript">
+      function openURL(urlname)
+      {
+        window.location=urlname;
+      }
+    </script>
+    ## If a Google Analytics GA4 code has been specified, include it.
+    #if 'googleAnalyticsId' in $Extras
+    <script async src="https://www.googletagmanager.com/gtag/js?id=$Extras.googleAnalyticsId"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '$Extras.googleAnalyticsId');
+    </script>
+    #end if
+  </head>
+
+  <body>
+    <div id="container">
+      <div id="masthead">
+        <h1>$station.location</h1>
+        <h2>$gettext("Today's Almanac")</h2>
+          <h2>$current.dateTime</h2>
+      </div>
+
+      <div id="stats_group">
+
+        <div class="stats">
+          <div class="stats_header">
+            $gettext('Sun')
+          </div>
+
+          <table>
+            #set $sun_altitude = $almanac.sun.alt
+            #if $sun_altitude < 0
+            #set $sun_None="<i>(" + $gettext("Always down") + ")</i>"
+            #else
+            #set $sun_None="<i>(" + $gettext("Always up") + ")</i>"
+            #end if
+            <tbody>
+                <tr>
+                  <td class="label">$gettext("Start civil twilight"):</td>
+                  <td class="data">$almanac(horizon=-6).sun(use_center=1).rise</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Sunrise"):</td>
+                  <td class="data">$almanac.sun.rise.string($sun_None)</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Transit"):</td>
+                  <td class="data">$almanac.sun.transit</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Sunset"):</td>
+                  <td class="data">$almanac.sun.set.string($sun_None)</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("End civil twilight"):</td>
+                  <td class="data">$almanac(horizon=-6).sun(use_center=1).set</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Azimuth"):</td>
+                  <td class="data">$almanac.sun.azimuth.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical", "Altitude"):</td>
+                  <td class="data">$("%.1f&deg;" % $sun_altitude)</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Right ascension"):</td>
+                  <td class="data">$almanac.sun.topo_ra.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Declination"):</td>
+                  <td class="data">$almanac.sun.topo_dec.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("In constellation")</td>
+                  <td class="data">$almanac.sun.constellation</td>
+                </tr>
+                #if $almanac.next_equinox.raw < $almanac.next_solstice.raw
+                ## The equinox is before the solstice. Display them in order.
+                <tr>
+                  <td class="label">$gettext("Equinox"):</td>
+                  <td class="data">$almanac.next_equinox</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Solstice"):</td>
+                  <td class="data">$almanac.next_solstice</td>
+                </tr>
+                #else
+                ## The solstice is before the equinox. Display them in order.
+                <tr>
+                  <td class="label">$gettext("Solstice"):</td>
+                  <td class="data">$almanac.next_solstice</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Equinox"):</td>
+                  <td class="data">$almanac.next_equinox</td>
+                </tr>
+                #end if
+                #if $almanac.next_aphelion.raw<$almanac.next_perihelion.raw
+                <tr>
+                  <td class="label">$gettext("Aphelion")</td>
+                  <td class="data">$almanac.next_aphelion</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Perihelion")</td>
+                  <td class="data">$almanac.next_perihelion</td>
+                </tr>
+                #else
+                <tr>
+                  <td class="label">$gettext("Perihelion")</td>
+                  <td class="data">$almanac.next_perihelion</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Aphelion")</td>
+                  <td class="data">$almanac.next_aphelion</td>
+                </tr>
+                #end if
+                <tr>
+                  <td class="label">$gettext("Equation of Time")</td>
+                  <td class="data">
+                  #if $lang=='fr'
+                  #set $eot = $almanac.legacy_equation_of_time
+                  #else
+                  #set $eot = $almanac.equation_of_time
+                  #end if
+#if $eot.raw and $eot.raw>=0
+&plus;#slurp
+#else
+&minus;#slurp
+#end if
+$eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div> <!-- End class "stats" -->
+
+        <p>&nbsp;</p>
+
+        <div class="stats">
+          <div class="stats_header">
+            $gettext('Moon')
+          </div>
+
+          <table>
+            <tbody>
+                <tr>
+                  <td class="label">$gettext("Rise"):</td>
+                  <td class="data">$almanac.moon.rise</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Transit"):</td>
+                  <td class="data">$almanac.moon.transit</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Set"):</td>
+                  <td class="data">$almanac.moon.set</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Azimuth"):</td>
+                  <td class="data">$almanac.moon.azimuth.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical", "Altitude"):</td>
+                  <td class="data">$almanac.moon.altitude.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Right ascension"):</td>
+                  <td class="data">$almanac.moon.topo_ra.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Declination"):</td>
+                  <td class="data">$almanac.moon.topo_dec.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical","Distance"):</td>
+                  <td class="data">$almanac.moon.topo_dist</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("In constellation")</td>
+                  <td class="data">$almanac.moon.constellation</td>
+                </tr>
+                #if $almanac.next_full_moon.raw < $almanac.next_new_moon.raw
+                <tr>
+                  <td class="label">$gettext("Full moon"):</td>
+                  <td class="data">$almanac.next_full_moon</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("New moon"):</td>
+                  <td class="data">$almanac.next_new_moon</td>
+                </tr>
+                #else
+                <tr>
+                  <td class="label">$gettext("New moon"):</td>
+                  <td class="data">$almanac.next_new_moon</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Full moon"):</td>
+                  <td class="data">$almanac.next_full_moon</td>
+                </tr>
+                #end if
+                #if $almanac.next_perigee_moon.raw<$almanac.next_apogee_moon.raw
+                <tr>
+                  <td class="label">$gettext("Perigee")</td>
+                  <td class="data">$almanac.next_perigee_moon</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Apogee")</td>
+                  <td class="data">$almanac.next_apogee_moon</td>
+                 </tr>
+                #else
+                <tr>
+                  <td class="label">$gettext("Apogee")</td>
+                  <td class="data">$almanac.next_apogee_moon</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Perigee")</td>
+                  <td class="data">$almanac.next_perigee_moon</td>
+                </tr>
+                #end if
+                <tr>
+                  <td class="label">$gettext("Phase"):</td>
+                  <td class="data">$almanac.moon_phase<br/>($almanac.moon_fullness% full)</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical","Moon tilt")</td>
+                  <td class="data">$almanac.moon.moon_tilt</td>
+                </tr>
+            </tbody>
+          </table>
+        </div> <!-- End class "stats" -->
+
+        <p>&nbsp;</p>
+
+        <div class="stats">
+          <div class="stats_header">
+            $almanac.venus.name
+          </div>
+
+          <table>
+            <tbody>
+                <tr>
+                  <td class="label">$gettext("Rise"):</td>
+                  <td class="data">$almanac.venus.rise</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Transit"):</td>
+                  <td class="data">$almanac.venus.transit</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Set"):</td>
+                  <td class="data">$almanac.venus.set</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Azimuth"):</td>
+                  <td class="data">$almanac.venus.azimuth.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical", "Altitude"):</td>
+                  <td class="data">$almanac.venus.altitude.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Right ascension"):</td>
+                  <td class="data">$almanac.venus.topo_ra.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Declination"):</td>
+                  <td class="data">$almanac.venus.topo_dec.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical","Distance"):</td>
+                  <td class="data">$almanac.venus.topo_dist.gigameter</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("In constellation")</td>
+                  <td class="data">$almanac.venus.constellation</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Phase"):</td>
+                  <td class="data">$almanac.venus_phase</td>
+                </tr>
+            </tbody>
+          </table>
+        </div> <!-- End class "stats" -->
+
+        <p>&nbsp;</p>
+
+        <div class="stats">
+          <div class="stats_header">
+            $almanac.mars_barycenter.name
+          </div>
+
+          <table>
+            <tbody>
+                <tr>
+                  <td class="label">$gettext("Rise"):</td>
+                  <td class="data">$almanac.mars_barycenter.rise</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Transit"):</td>
+                  <td class="data">$almanac.mars_barycenter.transit</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Set"):</td>
+                  <td class="data">$almanac.mars_barycenter.set</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Azimuth"):</td>
+                  <td class="data">$almanac.mars_barycenter.azimuth.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical", "Altitude"):</td>
+                  <td class="data">$almanac.mars_barycenter.altitude.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Right ascension"):</td>
+                  <td class="data">$almanac.mars_barycenter.topo_ra.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("Declination"):</td>
+                  <td class="data">$almanac.mars_barycenter.topo_dec.format('%.1f')</td>
+                </tr>
+                <tr>
+                  <td class="label">$pgettext("Astronomical","Distance"):</td>
+                  <td class="data">$almanac.mars_barycenter.topo_dist.gigameter</td>
+                </tr>
+                <tr>
+                  <td class="label">$gettext("In constellation")</td>
+                  <td class="data">$almanac.mars_barycenter.constellation</td>
+                </tr>
+            </tbody>
+          </table>
+        </div> <!-- End class "stats" -->
+
+      </div> <!-- End class "stats_group" -->
+
+      <div id="content">
+        
+        <div class="header">
+          <h3>$gettext("Almanac Plots")</h3>
+        </div>
+        <div id="plots">
+          $almanac.skymap
+          <br />
+          $almanac.sun.year_diagram
+          <br />
+          $almanac.eot_diagram
+          <br />
+          $almanac.analemma
+          $almanac.libration_diagram
+        </div>
+      </div> <!-- End id "content" -->
+
+      <div id="navbar">
+        <input type="button" value=$pgettext("Buttons","Current") onclick="openURL('index.html')" />
+        <input type="button" value=$pgettext("Buttons","Week") onclick="openURL('week.html')" />
+        <input type="button" value=$pgettext("Buttons","Month") onclick="openURL('month.html')" />
+        <input type="button" value=$pgettext("Buttons","Year") onclick="openURL('year.html')" />
+        <input type="button" value=$pgettext("Buttons","Almanac") onclick="openURL('almanac.html')" />
+      </div>
+    </div> <!-- End id "container" -->
+  </body>
+</html>
