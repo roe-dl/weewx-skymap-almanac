@@ -22,6 +22,8 @@ other buttons:
         <input type="button" value=$pgettext("Buttons","Almanac") onclick="openURL('almanac.html')" />
 ```
 
+![Almanac](../../doc-images/Standard-example.png)
+
 ## Localization
 
 To adapt the labels to your language look for the appropriate language

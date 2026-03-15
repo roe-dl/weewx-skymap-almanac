@@ -10,7 +10,7 @@ this extension.
 Simply replace the original `celestial.inc` file of the Seasons skin by
 the file provided here.
 
-![Seasons skin almanac page](../../Seasons-example.png)
+![Seasons skin almanac page](../../doc-images/Seasons-example.png)
 
 ## Localization
 

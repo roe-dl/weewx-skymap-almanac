@@ -1,7 +1,7 @@
 # weewx-skymap-almanac
 Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 
-![sky map](Seasons-example.png)
+![sky map](doc-images/Seasons-example.png)
 
 ## Contents
 
@@ -245,7 +245,7 @@ following parameters defined to adjust the layout. All of them are optional:
   If you look for a location within the European Union, you can get a
   rough estimate of the horizon for free from the European Commission at
   [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/).<br />
-  ![sky map Rittersgrün](rittersgruen.svg)<br />
+  ![sky map Rittersgrün](doc-images/rittersgruen.svg)<br />
   This example map shows the sky over the
   [railway station of Rittersgrün](https://97233.test-my-website.de/test/index.php)
   (which is a museum about Saxon railway history now) with the visible
@@ -349,7 +349,7 @@ defined to adjust the layout:
 This is the analemma at the Royal Observatory Greenwich at high noon mean
 time:
 
-![analemma](analemma.png)
+![analemma](doc-images/analemma.png)
 
 ## Libration
 
@@ -419,7 +419,7 @@ solar time and the local mean time.
 * `html_class`: set am HTML class for styling
 * `id`: assign an HTML ID to the SVG tag
 
-![equation of time](EoT.png)
+![equation of time](doc-images/EoT.png)
 
 ## Diagram of visibility
 
