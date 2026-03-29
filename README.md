@@ -27,10 +27,14 @@ Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 
 ## Prerequisites
 
-WeeWX from version 5.2 on and weewx-skyfield-almanac
+WeeWX from version 5.3 on and weewx-skyfield-almanac
 
 > [!NOTE]
 > You have to install weewx-skyfield-almanac first before installing this
+> extension.
+
+> [!NOTE]
+> You need the actual version of weewx-skyfield-almanac together with this
 > extension.
 
 ## Installation instructions
@@ -43,13 +47,13 @@ WeeWX from version 5.2 on and weewx-skyfield-almanac
 
 2) run the installer
 
-   WeeWX from version 5.2 on and WeeWX packet installation
+   WeeWX from version 5.3 on and WeeWX packet installation
 
    ```shell
    sudo weectl extension install weewx-skymap-almanac.zip
    ```
 
-   WeeWX from version 5.2 on and WeeWX pip installation into an virtual environment
+   WeeWX from version 5.3 on and WeeWX pip installation into an virtual environment
 
    ```shell
    source ~/weewx-venv/bin/activate
@@ -414,6 +418,9 @@ solar time and the local mean time.
     solar time (This is the historical way to present it.)
   * `time of day`: Instead of the equation of time draw lines of sunrise,
     transit, and sunset.
+* `x_label_format`: Format of the x axis labels. Default is the date format
+  setting of the operating system without year (`%x`). Possible alternatives
+  are for example `%d.%m.`, `%m/%d`, `%m`, or `%b`.
 * `location`: String to use as location in the diagram caption. Default
   is the station location as specified in `weewx.conf`.
 * `html_class`: set am HTML class for styling
