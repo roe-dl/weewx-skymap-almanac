@@ -151,6 +151,8 @@ class SkymapAlmanacType(weewx.almanac.AlmanacType):
         
         if attr=='skymap':
             return SkymapBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
+        if attr=='zodiacmap':
+            return ZodiacBinder(self.config_dict, self.station_location, almanac_obj, self.get_labels(almanac_obj))
         if attr=='moon_symbol':
             # color was ['rgba(255,243,228,0.5)','#ffecd5']
             return MoonSymbolBinder(almanac_obj, self.get_labels(almanac_obj), self.config_dict.get('moon_colors',['#bbb4ac19','#ffecd5']))
@@ -296,6 +298,9 @@ class SkymapBinder:
         # which heavenly bodies to show on the map
         # default: Sun, Moon, and all the planets
         self.bodies = config_dict.get('bodies',user.skyfieldalmanac.planets_list+[user.skyfieldalmanac.SUN,user.skyfieldalmanac.EARTHMOON])
+        if 'planets' in self.bodies:
+            self.bodies.remove('planets')
+            self.bodies = user.skyfieldalmanac.planets_list+self.bodies
         # which satellites to show on the map
         self.earthsatellites = config_dict.get('earth_satellites',[])
         # display options
@@ -354,7 +359,7 @@ class SkymapBinder:
                 if width and width!='auto' and isinstance(width,str) and width[-1]!='%':
                     width = weeutil.weeutil.to_int(width)
                 setattr(self,key,width)
-            elif key in {'show_stars','show_timestamp','show_location','show_ecliptic','show_path_of_sun','show_path_of_moon'}:
+            elif key.startswith('show_'):
                 setattr(self,key,to_bool(kwargs[key],('hide',)))
             elif key=='fromoutside':
                 self.inout = 1.0 if kwargs[key] else -1.0
@@ -378,9 +383,13 @@ class SkymapBinder:
     def __str__(self):
         try:
             return self.skymap(self.almanac_obj)
+        except skyfield.errors.EphemerisRangeError as e:
+            logerr("%s out of range: %s - %s" % (time.strftime('%Y-%m-%d %H:%M:%S UTC',time.gmtime(self.almanac_obj.time_ts)),e.__class__.__name__,e))
+            raise
         except Exception as e:
             if self.log_failure:
                 logerr("cannot create sky map: %s - %s" % (e.__class__.__name__,e))
+                weeutil.logger.log_traceback(log.error, "%s ****  " % self.__class__.__name__)
             raise
     
     @staticmethod
@@ -417,7 +426,7 @@ class SkymapBinder:
         return  '<path fill="%s" stroke="none" d="M%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fl%.4f,%.4fz" />' % (
             color,x-r,y,0.7*r,0.3*r,0.3*r,0.7*r,0.3*r,-0.7*r,0.7*r,-0.3*r,-0.7*r,-0.3*r,-0.3*r,-0.7*r,-0.3*r,0.7*r)
 
-    def draw_constellationship(self, alts_degrees, azs_radians, hips, color):
+    def draw_constellationship(self, alts_degrees, azs_radians, hips, color, zodiac_color, line_width, xy_func, min2, max2):
         """ draw constellation lines 
         
             Args:
@@ -433,10 +442,15 @@ class SkymapBinder:
                 a tuple of the abbreviation of the constellation name and
                 a list of tuples, each of them representing a line
         """
+        # check if zodiac constellations are to be drawn in a different color
+        if zodiac_color:
+            zodiac_constellations = set(user.skyfieldalmanac.ZODIAC)
+        else:
+            col = ''
         # index of the Hipparcos catalogue numbers in the list
         hips_index = {val:idx for idx,val in enumerate(hips)}
         # format
-        s = ['<g id="constellations" stroke="%s" stroke-width="0.1" fill="none">' % color]
+        s = ['<g id="constellations" stroke="%s" stroke-width="%s" fill="none">' % (color,line_width)]
         # loop over all the constellations
         for constellation in self.constellationship[0]:
             # loop over all lines of the constellation
@@ -445,15 +459,85 @@ class SkymapBinder:
                 # one single line
                 p1 = hips_index.get(line[0])
                 p2 = hips_index.get(line[1])
-                if p1 and p2 and (alts_degrees[p1]>=0 or alts_degrees[p2]>=0):
+                if p1 and p2 and (min2<=alts_degrees[p1]<=max2 or min2<=alts_degrees[p2]<=max2):
                     # both stars are available
-                    x1, y1 = self.to_xy(alts_degrees[p1],azs_radians[p1])
-                    x2, y2 = self.to_xy(alts_degrees[p2],azs_radians[p2])
+                    x1, y1 = xy_func(alts_degrees[p1],azs_radians[p1])
+                    x2, y2 = xy_func(alts_degrees[p2],azs_radians[p2])
+                    if abs(x2-x1)>180.0:
+                        if x1<x2:
+                            d.append('M%.4f,%.4fL%.4f,%.4f' % (x1,y1,x2-360.0,y2))
+                            x1 += 360.0
+                        else:
+                            d.append('M%.4f,%.4fL%.4f,%.4f' % (x1-360.0,y1,x2,y2))
+                            x2 += 360.0
                     d.append('M%.4f,%.4fL%.4f,%.4f' % (x1,y1,x2,y2))
             # If there are lines in the visible part of the sky, add them.
             if d:
-                s.append('<path id="constellation_%s" d="%s" />\n' % (constellation[0],''.join(d)))
+                if zodiac_color:
+                    col = ('stroke="%s" stroke-width="%s" ' % (zodiac_color,line_width*1.5)) if constellation[0] in zodiac_constellations else ''
+                s.append('<path id="constellation_%s" %sd="%s" />\n' % (constellation[0],col,''.join(d)))
         s.append('</g>\n')
+        return ''.join(s)
+    
+    def draw_stars(self, observer, time_ti, coord_func, xy_func, constellation_line_color, zodiac_line_color, line_width):
+        """ draw stars
+        """
+        s = []
+        df = user.skyfieldalmanac.stars
+        logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
+        if df is not None and self.show_stars:
+            # format
+            format = self.formats.get('stars',('mag','#ff0'))
+            varsize = format[0].lower()=='mag'
+            if not varsize:
+                r = weeutil.weeutil.to_float(format[0])
+            col = format[1]
+            # filter
+            df = df[df['magnitude'] <= self.max_magnitude]
+            # create Star instance
+            selected_stars = Star.from_dataframe(df)
+            # calculate all the positions in the sky
+            apparent = observer.at(time_ti).observe(selected_stars).apparent()
+            c2s, c1s, distances, min2, max2 = coord_func(apparent)
+            # draw constellationship lines
+            if self.show_constellations and self.constellationship and self.constellationship[0]:
+                s.append(self.draw_constellationship(c2s, c1s, df.index, constellation_line_color, zodiac_line_color, line_width, xy_func, min2, max2))
+            # constellation names
+            if user.skyfieldalmanac.constellation_at:
+                abbrs = user.skyfieldalmanac.constellation_at(apparent)
+            else:
+                abbrs = [None]*len(alts)
+            # draw stars
+            s.append('<g fill="%s" stroke="none">\n' % col)
+            for alt, az, distance, mag, hip, abbr in zip(c2s,c1s,distances.light_seconds()/31557600,df['magnitude'],df.index,abbrs):
+                if min2<=alt<=max2:
+                    x,y = xy_func(alt,az)
+                    #loginf('%s %s %s %s' % (alt,az,x,y))
+                    #break
+                    if varsize: r = SkymapBinder.magnitude_to_r(mag)
+                    if mag<=self.star_tooltip_max_magnitude:
+                        txt = user.skyfieldalmanac.hip_to_starname(hip,'')
+                        if txt: txt += '\n'
+                        txt += 'HIP%s\n' % hip
+                        if abbr:
+                            if abbr in self.labels.get('Constellations',dict()):
+                                # constellation name in local language
+                                nm = self.labels['Constellations'][abbr]
+                            elif user.skyfieldalmanac.constellation_names:
+                                # constellation name in latin
+                                nm = user.skyfieldalmanac.constellation_names[abbr]
+                            else:
+                                # constellation name not available
+                                nm = None
+                            if nm:
+                                txt += '%s (%s)\n' % (nm,abbr)
+                        if distance:
+                            txt += '%s: %.0f %s\n' % (self.get_text('Distance'),distance,'Lj')
+                        txt = '><title>%s%s: %.2f</title></circle>' % (txt,self.get_text('Magnitude'),mag)
+                    else:
+                        txt = ' />'
+                    s.append('<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt))
+            s.append('</g>\n')
         return ''.join(s)
     
     def circle_of_right_ascension(self, observer, almanac_obj, time_ti, color='#808080'):
@@ -490,7 +574,7 @@ class SkymapBinder:
         s.append('</g>\n')
         return ''.join(s)
     
-    def circle_of_ecliptic(self, observer, almanac_obj, time_ti, color='#C000C0'):
+    def circle_of_ecliptic(self, observer, almanac_obj, time_ti, coord_func, xy_func, color='#C000C0'):
         """ draw circle of ecliptic 
         
             This draws a dotted line with each dot 1 day apart from the other
@@ -510,12 +594,13 @@ class SkymapBinder:
         apparent = observer.at(time_ti).observe(dots).apparent()
         time2_ts = time.thread_time_ns()*0.000001
         # calculate altitude and azimuth for those positions
-        alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        #alts, azs, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+        alts, azs, _, min2, max2 = coord_func(apparent)
         time3_ts = time.thread_time_ns()*0.000001
         # draw dots of the circle of the ecliptic
-        for alt, az, day in zip(alts.degrees,azs.radians,days):
-            if alt>=0:
-                x,y = self.to_xy(alt,az)
+        for alt, az, day in zip(alts,azs,days):
+            if min2<=alt<=max2:
+                x,y = xy_func(alt,az)
                 s.append('<circle cx="%.4f" cy="%.4f" r="%s" />\n' % (x,y,0.2))
         time4_ts = time.thread_time_ns()*0.000001
         # mark first point of Aries (March equinox, in northern hemisphere
@@ -614,172 +699,13 @@ class SkymapBinder:
             else:
                 return '<circle cx="0" cy="0" r="89.8" />'
 
-    def get_text(self, text):
-        """ get localized text """
-        return self.labels.get(text,text)
-
-    def skymap(self, almanac_obj):
-        """ create SVG image of the sky with heavenly bodies
-        
-            Despite they are not visible due to the light of the day, the 
-            planets are included in the map all day long. The diameter
-            of the bodies is not according to scale.
-        """
-        log_start_ts = time.time()
-        time0_ts = time.thread_time_ns()*0.000001
-        ordinates = almanac_obj.formatter.ordinate_names
-        time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
-        observer = SkymapBinder.get_observer(almanac_obj)
+    def draw_solar_system_bodies(self, observer, time_ti, coord_func, xy_func, label_coord_func, bodies, moon_background_color, almanac_obj, r_min):
+        """ draw Sun, Moon, planets, and satellites """
         earth = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH]
         station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
-        width = self.width if self.width else 800
-        s = [
-            SkymapAlmanacType.SVG_START,
-            ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
-            SkymapAlmanacType.SVG_START_ATTR % (width,width,
-            '\n  class="%s"' % self.html_class if self.html_class else '',
-            '\n  id="%s"' % self.id if self.id else '',
-            '\n  style="max-width:%s;max-height:%s;"' % (self.max_width,self.max_width) if self.max_width else ''),
-            # SVG description (always in English, not presented to the user)
-            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s %s</desc>\n' % (
-                abs(self.almanac_obj.lat),
-                'N' if self.almanac_obj.lat>=0 else 'S',
-                abs(self.almanac_obj.lon),
-               'E' if self.almanac_obj.lon>=0 else 'W',
-                time.strftime("%Y-%m-%dT%H:%M:%S",time.localtime(self.almanac_obj.time_ts)),
-                timezone_name(self.almanac_obj.time_ts)
-            ),
-            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
-            '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
-        ]
-        # background
-        alt, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().altaz()
-        if alt.degrees>(-0.27):
-            # light day (sun above horizon)
-            background_color = self.day_color
-            moon_background_color = '#cfcfe6'
-            constellation_line_color = '#B0B000'
-            horizon_color = self.horizon_day_color
-        elif alt.degrees<(-18):
-            # dark night (sun below 18 degrees below the horizon)
-            background_color = self.night_color
-            moon_background_color = '#2a2927'
-            constellation_line_color = '#909000'
-            horizon_color = self.horizon_night_color
-        else:
-            # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
-            dawn = 3.0-abs(alt.degrees)/6.0
-            background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
-            moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
-            constellation_line_color = '#A0A000'
-            horizon_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.horizon_night_color,self.horizon_day_color)])
-        background_color = "#%02X%02X%02X" % background_color
-        horizon_color = "#%02X%02X%02X" % horizon_color
-        s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
-        # start clipping
-        s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
-        # path of Sun
-        if self.show_path_of_sun:
-            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.SUN, color='#FFFFFF', hide=self.show_path_of_sun=='hide'))
-        # path of Moon
-        if self.show_path_of_moon:
-            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.EARTHMOON, color='#cfcfe6', hide=self.show_path_of_moon=='hide'))
-        # altitude scale
-        s.append('<g id="altitude_scale">\n')
-        s.append('<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180')
-        for i in range(11):
-            if i!=5:
-                s.append('M%s,-1.5v3M-1.5,%sh3' % (i*15-75,i*15-75))
-        s.append('" />\n')
-        for i in range(11):
-            if i!=5:
-                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&#176;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
-                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&#176;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
-        # celestial pole and equator
-        # displayed for latitude more than 5 degrees north or south only
-        if abs(almanac_obj.lat)>5.0:
-            # coordinate of celestial pole in the diagram
-            y1 = almanac_obj.lat-90 if almanac_obj.lat>=0 else 90+almanac_obj.lat
-            # northern or southern hemisphere
-            y2 = 0 if almanac_obj.lat>=0 else 1
-            # semi-major axis
-            x1 = 90.0/numpy.cos(numpy.arcsin((90.0-abs(almanac_obj.lat))/90.0))
-            # name of the celestial pole
-            txt = ordinates[0 if almanac_obj.lat>=0 else 8]
-            # mark of celestial pole and line of celestial equator
-            s.append(
-                '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
-                y1,x1,y2))
-            # label of the celestial pole
-            s.append( 
-                '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
-                y1,txt))
-            # circle of right ascension
-            s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
-        s.append('</g>\n')
-        time1_ts = time.thread_time_ns()*0.000001
-        # ecliptic
-        if self.show_ecliptic:
-            s.append(self.circle_of_ecliptic(observer, almanac_obj, time_ti))
-        time2_ts = time.thread_time_ns()*0.000001
-        # stars
-        df = user.skyfieldalmanac.stars
-        logdbg("stars: user.skyfieldalmanac.stars %s, self.show_stars %s" % (df is not None,self.show_stars))
-        if df is not None and self.show_stars:
-            # format
-            format = self.formats.get('stars',('mag','#ff0'))
-            varsize = format[0].lower()=='mag'
-            if not varsize:
-                r = weeutil.weeutil.to_float(format[0])
-            col = format[1]
-            # filter
-            df = df[df['magnitude'] <= self.max_magnitude]
-            # create Star instance
-            selected_stars = Star.from_dataframe(df)
-            # calculate all the positions in the sky
-            apparent = observer.at(time_ti).observe(selected_stars).apparent()
-            alts, azs, distances = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-            # draw constellationship lines
-            if self.show_constellations and self.constellationship and self.constellationship[0]:
-                s.append(self.draw_constellationship(alts.degrees, azs.radians, df.index, constellation_line_color))
-            # constellation names
-            if user.skyfieldalmanac.constellation_at:
-                abbrs = user.skyfieldalmanac.constellation_at(apparent)
-            else:
-                abbrs = [None]*len(alts)
-            # draw stars
-            s.append('<g fill="%s" stroke="none">\n' % col)
-            for alt, az, distance, mag, hip, abbr in zip(alts.degrees,azs.radians,distances.light_seconds()/31557600,df['magnitude'],df.index,abbrs):
-                if alt>=0:
-                    x,y = self.to_xy(alt,az)
-                    if varsize: r = SkymapBinder.magnitude_to_r(mag)
-                    if mag<=self.star_tooltip_max_magnitude:
-                        txt = user.skyfieldalmanac.hip_to_starname(hip,'')
-                        if txt: txt += '\n'
-                        txt += 'HIP%s\n' % hip
-                        if abbr:
-                            if abbr in self.labels.get('Constellations',dict()):
-                                # constellation name in local language
-                                nm = self.labels['Constellations'][abbr]
-                            elif user.skyfieldalmanac.constellation_names:
-                                # constellation name in latin
-                                nm = user.skyfieldalmanac.constellation_names[abbr]
-                            else:
-                                # constellation name not available
-                                nm = None
-                            if nm:
-                                txt += '%s (%s)\n' % (nm,abbr)
-                        if distance:
-                            txt += '%s: %.0f %s\n' % (self.get_text('Distance'),distance,'Lj')
-                        txt = '><title>%s%s: %.2f</title></circle>' % (txt,self.get_text('Magnitude'),mag)
-                    else:
-                        txt = ' />'
-                    s.append('<circle id="HIP%s" cx="%.4f" cy="%.4f" r="%.2f"%s\n' % (hip,x,y,r,txt))
-            s.append('</g>\n')
-        time3_ts = time.thread_time_ns()*0.000001
-        # bodies
+        ordinates = almanac_obj.formatter.ordinate_names
         dots = []
-        for body in (self.bodies+self.earthsatellites):
+        for body in bodies:
             format = self.formats.get(body,self.formats.get('%s_*' % body.split('_')[0]))
             body_eph = user.skyfieldalmanac.ephemerides.get(body.lower())
             if body_eph is None:
@@ -837,21 +763,22 @@ class SkymapBinder:
                     constellation_name = ''
                 # geocentric ecliptic coordinates
                 elat, elon, _ = earth.at(time_ti).observe(body_eph).apparent().frame_latlon(ecliptic_frame)
-                ecliptic_coords = '\n%s: &beta;=%.4f&#176; &lambda;=%.4f&#176;' % (self.get_text('ecliptical').capitalize(),elat.degrees,elon.degrees)
-            alt, az, distance = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-            if alt.degrees>=0:
-                ra, dec, _ = apparent.radec('date')
-                x,y = self.to_xy(alt.degrees,az.radians)
-                dir = int(round(az.degrees/22.5,0))
+                ecliptic_coords = '\n%s: &#946;=%.4f&#176; &#955;=%.4f&#176;' % (self.get_text('ecliptical').capitalize(),elat.degrees,elon.degrees)
+            alt, az, distance, min2, max2 = coord_func(apparent)
+            if min2<=alt<=max2:
+                #ra, dec, _ = apparent.radec('date')
+                x,y = xy_func(alt,az)
+                alt, az, dec, ra = label_coord_func(apparent, alt, az)
+                dir = int(round(az/22.5,0))
                 if dir==16: dir = 0
                 # horizontal coordinate system: altitude, azimuth
                 # rotierendes äquatoriales Koordinatensystem: ra dec
                 # ortsfestes äquatoriales Koordindatensystem: ha dec
-                txt = '%s\n%s=%.1f&#176; %s=%.1f&#176; %s\n%s: ra=%.1fh dec=%.1f&#176;%s%s' % (
+                txt = '%s\n%s=%.1f&#176; %s=%.1f&#176; %s\n%s: &#945;=%.1fh &#948;=%.1f&#176;%s%s' % (
                     label,
-                    self.get_text('Altitude'),alt.degrees,
-                    self.get_text('Azimuth'),az.degrees,ordinates[dir],
-                    self.get_text('equatorial').capitalize(),ra.hours,dec.degrees,
+                    self.get_text('Altitude'),alt,
+                    self.get_text('Azimuth'),az,ordinates[dir],
+                    self.get_text('equatorial').capitalize(),ra,dec,
                     ecliptic_coords,
                     constellation_name)
                 phase = None
@@ -872,7 +799,7 @@ class SkymapBinder:
                     # planets other than earth
                     radius = user.skyfieldalmanac.SIZES[body.split('_')[0]][0]/distance.km*RAD2DEG
                     r = SkymapBinder.magnitude_to_r(magnitude)
-                    if r<0.2: r = 0.2
+                    if r<r_min: r = r_min
                     if body in {'mercury','venus'}:
                         phase, dir, idx = user.skyfieldalmanac.planet_phase(body_eph,time_ti)
                         try:
@@ -886,7 +813,7 @@ class SkymapBinder:
                 else:
                     # other heavenly objects including Pluto
                     radius = None
-                    r = 0.2
+                    r = r_min
                 if body in {'mars','mars_barycenter'}:
                     col = '#ff8f5e'
                 elif body=='moon':
@@ -928,8 +855,8 @@ class SkymapBinder:
                         point.elevation.km,
                         unit).replace('_','&#8239;')
                 dots.append((body,txt,x,y,r,distance,col,radius,phase,short_label,shape))
-        time4_ts = time.thread_time_ns()*0.000001
         dots.sort(key=lambda x:-x[5].km)
+        s = []
         for dot in dots:
             if dot[0]=='moon':
                 s.append(moon(*dot))
@@ -948,6 +875,152 @@ class SkymapBinder:
                 if dot[9] and len(dot[9])<=2:
                     s.append('<text x="%.4f" y="%.4f" font-size="%s" fill="#fff" text-anchor="middle" dominant-baseline="middle">%s</text>' % (dot[2],dot[3],dot[4]*1.2,dot[9]))
                 s.append('</g>\n')
+        return ''.join(s)
+
+    def get_text(self, text):
+        """ get localized text """
+        return self.labels.get(text,text)
+    
+    def get_colors(self, observer, time_ti):
+        alt, _, _ = observer.at(time_ti).observe(user.skyfieldalmanac.ephemerides['sun']).apparent().altaz()
+        if alt.degrees>(-0.27):
+            # light day (sun above horizon)
+            background_color = self.day_color
+            moon_background_color = '#cfcfe6'
+            constellation_line_color = '#B0B000'
+            horizon_color = self.horizon_day_color
+        elif alt.degrees<(-18):
+            # dark night (sun below 18 degrees below the horizon)
+            background_color = self.night_color
+            moon_background_color = '#2a2927'
+            constellation_line_color = '#909000'
+            horizon_color = self.horizon_night_color
+        else:
+            # dawn (sun between 18 degrees and 0.27 degrees below the horizon)
+            dawn = 3.0-abs(alt.degrees)/6.0
+            background_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.night_color,self.day_color)])
+            moon_background_color = "#%02X%02X%02X" % tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip((42,41,39),(207,207,230))])
+            constellation_line_color = '#A0A000'
+            horizon_color = tuple([int(n+dawn*dawn*(d-n)/9.0) for n,d in zip(self.horizon_night_color,self.horizon_day_color)])
+        background_color = "#%02X%02X%02X" % background_color
+        horizon_color = "#%02X%02X%02X" % horizon_color
+        return background_color, moon_background_color, constellation_line_color, horizon_color
+
+    def skymap(self, almanac_obj):
+        """ create SVG image of the sky with heavenly bodies
+        
+            Despite they are not visible due to the light of the day, the 
+            planets are included in the map all day long. The diameter
+            of the bodies is not according to scale.
+        """
+        log_start_ts = time.time()
+        time0_ts = time.thread_time_ns()*0.000001
+        ordinates = almanac_obj.formatter.ordinate_names
+        time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
+        observer = SkymapBinder.get_observer(almanac_obj)
+        #earth = user.skyfieldalmanac.ephemerides[user.skyfieldalmanac.EARTH]
+        station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
+        width = self.width if self.width else 800
+        # define function to get coordinates used for plot
+        def coord_func(apparent):
+            alt, az, dist = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+            return alt.degrees, az.radians, dist, 0.0, 90.0
+        def label_coord_func(apparent, alt, az):
+            ra, dec, _ = apparent.radec('date')
+            return alt, az*RAD2DEG, dec.degrees, ra.hours
+        def extended_coord_func(apparent):
+            alt, az, dist = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+            ra, dec, _ = apparent.radec('date')
+            return alt.degrees, az.radians, dist, 0.0, 90.0, alt, az, ra, dec
+        # define function to convert coordinates to pixel
+        def xy_func(alt, az):
+            return self.to_xy(alt, az)
+        s = [
+            SkymapAlmanacType.SVG_START,
+            ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
+            SkymapAlmanacType.SVG_START_ATTR % (width,width,
+            '\n  class="%s"' % self.html_class if self.html_class else '',
+            '\n  id="%s"' % self.id if self.id else '',
+            '\n  style="max-width:%s;max-height:%s;"' % (self.max_width,self.max_width) if self.max_width else ''),
+            # SVG description (always in English, not presented to the user)
+            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s %s</desc>\n' % (
+                abs(self.almanac_obj.lat),
+                'N' if self.almanac_obj.lat>=0 else 'S',
+                abs(self.almanac_obj.lon),
+               'E' if self.almanac_obj.lon>=0 else 'W',
+                time.strftime("%Y-%m-%dT%H:%M:%S",time.localtime(self.almanac_obj.time_ts)),
+                timezone_name(self.almanac_obj.time_ts)
+            ),
+            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
+            '<defs><clipPath id="weewxskymapbackgroundclippath"><circle cx="0" cy="0" r="89.8" /></clipPath></defs>\n'
+        ]
+        # background
+        background_color, moon_background_color, constellation_line_color, horizon_color = self.get_colors(observer, time_ti)
+        s.append('<circle cx="0" cy="0" r="90" fill="%s" stroke="currentColor" stroke-width="0.4" />\n' % background_color)
+        # start clipping
+        s.append('<g clip-path="url(#weewxskymapbackgroundclippath)">\n')
+        # path of Sun
+        if self.show_path_of_sun:
+            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.SUN, color='#FFFFFF', hide=self.show_path_of_sun=='hide'))
+        # path of Moon
+        if self.show_path_of_moon:
+            s.append(self.path_of_body(observer, almanac_obj, time_ti, user.skyfieldalmanac.EARTHMOON, color='#cfcfe6', hide=self.show_path_of_moon=='hide'))
+        # altitude scale
+        s.append('<g id="altitude_scale">\n')
+        s.append('<path fill="none" stroke="#808080" stroke-width="0.2" d="M-90,0h180M0,-90v180')
+        for i in range(11):
+            if i!=5:
+                s.append('M%s,-1.5v3M-1.5,%sh3' % (i*15-75,i*15-75))
+        s.append('" />\n')
+        for i in range(11):
+            if i!=5:
+                s.append('<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="middle" dominant-baseline="text-top">%s&#176;</text>' % (i*15-75,6,i*15+15 if i<5 else 165-i*15))
+                s.append( '<text x="%s" y="%s" style="font-size:5px" fill="#808080" text-anchor="start" dominant-baseline="middle">%s&#176;</text>' % (2.5,i*15-75,i*15+15 if i<5 else 165-i*15))
+        # celestial pole and equator
+        # displayed for latitude more than 5 degrees north or south only
+        if abs(almanac_obj.lat)>5.0:
+            # coordinate of celestial pole in the diagram
+            y1 = almanac_obj.lat-90 if almanac_obj.lat>=0 else 90+almanac_obj.lat
+            # northern or southern hemisphere
+            y2 = 0 if almanac_obj.lat>=0 else 1
+            # semi-major axis
+            x1 = 90.0/numpy.cos(numpy.arcsin((90.0-abs(almanac_obj.lat))/90.0))
+            # name of the celestial pole
+            txt = ordinates[0 if almanac_obj.lat>=0 else 8]
+            # mark of celestial pole and line of celestial equator
+            s.append(
+                '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
+                y1,x1,y2))
+            # label of the celestial pole
+            s.append( 
+                '<text x="-3.5" y="%s" style="font-size:5px" fill="#808080" text-anchor="end" dominant-baseline="middle">%s</text>\n' % (
+                y1,txt))
+            # circle of right ascension
+            s.append(self.circle_of_right_ascension(observer, almanac_obj, time_ti))
+        s.append('</g>\n')
+        time1_ts = time.thread_time_ns()*0.000001
+        # ecliptic
+        if self.show_ecliptic:
+            s.append(self.circle_of_ecliptic(observer, almanac_obj, time_ti, coord_func, xy_func))
+        time2_ts = time.thread_time_ns()*0.000001
+        # stars
+        s.append(self.draw_stars(
+            observer, time_ti, 
+            coord_func, xy_func,
+            constellation_line_color, None,
+            0.1
+        ))
+        time3_ts = time.thread_time_ns()*0.000001
+        # solar system bodies
+        s.append(self.draw_solar_system_bodies(
+            observer, time_ti,
+            coord_func, xy_func, label_coord_func,
+            self.bodies+self.earthsatellites,
+            moon_background_color,
+            almanac_obj,
+            0.2
+        ))
+        time4_ts = time.thread_time_ns()*0.000001
         # horizon
         s.append(self.get_horizon(True,horizon_color))
         time5_ts = time.thread_time_ns()*0.000001
@@ -999,7 +1072,7 @@ class SkymapBinder:
             if '%x' in almanac_obj.formatter.time_format_dict.get('ephem_year'):
                 time_s = (time_vt.format('%x'),time_vt.format('%X'))
             else:
-                time_s = str(time_vt).split(' ')
+                time_s = str(time_vt).rsplit(' ',1)
             s.append('<text x="97" dy="87" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[0])
             if len(time_s)>1 and time_s[1]:
                 s.append('<text x="97" y="93" font-size="5" fill="currentColor" text-anchor="end">%s</text>\n' % time_s[1])
@@ -1035,6 +1108,232 @@ class SkymapBinder:
         return ''.join(s)
 
 
+class ZodiacBinder(SkymapBinder):
+    """ radec star chart """
+    
+    SVG_START_ATTR ='''
+  width="%s" height="%s" 
+  viewBox="0 0 %s %s"
+  xmlns="http://www.w3.org/2000/svg"%s%s%s>
+'''
+
+    # Right ascension of the zodiac constellations at epoch 2010
+    # Note: This refers to the list of zodiac constellations at user.skyfieldalmanac
+    #            Psc,Ari,Tau,Gem,Cnc, Leo, Vir, Lib, Sco, Sgr, Cap, Aqr
+    ZODIAC_RA = [0.8,2.5,4.7,6.9,8.4,10.3,12.9,15.1,16.8,18.9,20.8,22.9]
+    
+    def __init__(self, config_dict, station_location, almanac_obj, labels):
+        super(ZodiacBinder,self).__init__(config_dict, station_location, almanac_obj, labels)
+        self.show_legend = True
+        self.show_visibility = True
+        self.caption = self.get_text('The Sun, Moon, and the planets in the zodiac')
+        #self.night_color = tuple([int(val*1.1 if idx<3 else val) for idx, val in enumerate(self.night_color)])
+
+    def print_zodiac_names(self, observer, time_ti, coord_func, xy_func, y0, color, fontsize):
+        """ print the zodiac names above the plot area """
+        abbr = False
+        # create fictive stars
+        zodiac = Star(ra_hours=numpy.array(ZodiacBinder.ZODIAC_RA), dec_degrees=numpy.zeros(len(ZodiacBinder.ZODIAC_RA)), epoch=user.skyfieldalmanac.ts.utc(2010))
+        # get actual position
+        apparent = observer.at(time_ti).observe(zodiac).apparent()
+        dec, ra, _, _, _ = coord_func(apparent)
+        # get image coordinates
+        xx, yy = xy_func(dec,ra)
+        # print names
+        s = ['<g fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="auto">\n' % (color,fontsize,)]
+        for x, nm in zip(xx,user.skyfieldalmanac.ZODIAC):
+            s.append('<text x="%.4f" y="%.4f">%s</text>\n' % (x,y0,nm if abbr else self.labels['Constellations'][nm]))
+            #s.append('<circle cx="%s" cy="%s" r="1" />\n' % (x,y0))
+        s.append('</g>\n')
+        return ''.join(s)
+    
+    def draw_visibility_background(self, almanac_obj, observer, time_ti, xy_func):
+        earth_color = "#%02X%02X%02X" % (46,32,25) # (92,64,51) # self.day_color
+        horizon_color = 'none'
+        azs = numpy.arange(0.0,360.0,5.0)
+        alts = numpy.full(len(azs),0.0)
+        alts = Angle(degrees=alts)
+        azs = Angle(degrees=azs)
+        station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
+        apparent = observer.at(time_ti).from_altaz(alt=alts,az=azs)
+        ra, dec, _ = apparent.radec()
+        xx, yy = xy_func(dec.degrees, ra.hours)
+        s = ['<path fill="%s" stroke="%s" stroke-width="0.4" d="M%.4f,%.4f' % (earth_color,horizon_color,xx[0],yy[0])]
+        x0, y0 = xx[0], yy[0]
+        if almanac_obj.lat>=0:
+            # northern hemisphere
+            for x, y in zip(xx[1:],yy[1:]):
+                if x>x0:
+                    y_down = xy_func(-90.0,0.0)[1]
+                    s.append('L%.4f,%.4f' % (x-360,y))
+                    s.append('L%.4f,%.4f' % (x-360,y_down))
+                    s.append('L%.4f,%.4f' % (x0+360,y_down))
+                    s.append('L%.4f,%.4f' % (x0+360,y0))
+                s.append('L%.4f,%.4f' % (x,y))
+                x0, y0 = x, y
+        else:
+            # southern hemisphere
+            for x, y in zip(xx[1:],yy[1:]):
+                if x<x0:
+                    y_down = xy_func(90.0,0.0)[1]
+                    s.append('L%.4f,%.4f' % (x+360,y))
+                    s.append('L%.4f,%.4f' % (x+360,y_down))
+                    s.append('L%.4f,%.4f' % (x0-360,y_down))
+                    s.append('L%.4f,%.4f' % (x0-360,y0))
+                s.append('L%.4f,%.4f' % (x,y))
+                x0, y0 = x, y
+        s.append('z" />\n')
+
+        """
+        # Try spline instead of strait line
+        s.append('<circle cx="%s" cy="%s" r="1" fill="#f0f" />' % (xx[0],yy[0]))
+        azs = numpy.arange(0.0,360.0,90.0)
+        alts = numpy.full(len(azs),0.0)
+        alts = Angle(degrees=alts)
+        azs = Angle(degrees=azs)
+        station = wgs84.latlon(almanac_obj.lat,almanac_obj.lon,elevation_m=almanac_obj.altitude)
+        apparent = observer.at(time_ti).from_altaz(alt=alts,az=azs)
+        ra, dec, _ = apparent.radec()
+        loginf('dec %s %s %s %s' % tuple(dec.degrees))
+        xx, yy = xy_func(dec.degrees, ra.hours)
+        s.append('<path fill="none" stroke="#00d00080" stroke-width="0.4" d="M%.4f,%.4f' % (xx[1]+(360 if xx[3]>xx[1] else 0),(yy[2]+yy[0])/2))
+        x = (xx[2]-xx[0])/2
+        if x>0: x = -x
+        y = (yy[2]-yy[0])/2
+        a = 1.333
+        s.append('c%s,%s %s,%s %s,%s' % (x/2*a,y*a,2*x-x/2*a,y*a,2*x,0))
+        s.append('c%s,%s %s,%s %s,%s' % (x/2*a,-y*a,2*x-x/2*a,-y*a,2*x,0))
+        s.append('" />\n')
+        s.append('<circle cx="%s" cy="%s" r="0.2" fill="#f0f" />' % (xx[2],yy[2]))
+        s.append('<circle cx="%s" cy="%s" r="0.2" fill="#f0f" />' % (xx[1],yy[1]))
+        loginf('xx %s %s %s | %s' % (xx[1]-xx[0],xx[2]-xx[1],xx[3]-xx[2],xx[2]-xx[0]))
+        loginf('yy %s %s %s | %s' % (yy[1]-yy[0],yy[2]-yy[1],yy[3]-yy[2],yy[3]-yy[1]))
+        """
+
+        return ''.join(s)
+    
+    def skymap(self, almanac_obj):
+        show_legend = self.show_legend
+        # diagram area
+        fontsize = 3.5 if self.width>=1000 else 6
+        fontsize = 9.3333-self.width/240 if self.width>=800 else 6
+        #width = int(self.width-x0-fontsize)
+        #height = int(self.height-fontsize*(2.7+2.2+(1.1 if True else 0)+(1.1 if show_legend else 0.0) ))
+        width = 360
+        height = 60
+        x0 = int(fontsize*4.5)
+        box_width = width+x0+fontsize
+        box_height = height+fontsize*(2.7+2.2+(1.1 if True else 0)+(1.1 if show_legend else 0.0)+1.1 )
+        svg_height = self.width*box_height/box_width
+        y0 = int(box_height-fontsize*( 2.7+(1.1 if show_legend else 0.0) ))
+        y_min = -30
+        y_max = 30
+        x_factor = width/24
+        y_factor = height/(y_min-y_max)
+        # time to present
+        time_ti = user.skyfieldalmanac.timestamp_to_skyfield_time(almanac_obj.time_ts)
+        # observer
+        observer = SkymapBinder.get_observer(self.almanac_obj)
+        # clippath id
+        clippathid = "weewxskymapbackgroundclippath%.0f" % ((time.time()%300.0)*10000.0)
+        logdbg('zodiac x0="%s" y0="%s" width="%s" height="%s" x_factor="%s" y_factor="%s"' % (x0,y0,width,height,x_factor,y_factor))
+        def coord_func(apparent):
+            ra, dec, dist = apparent.radec('date')
+            return dec.degrees, ra.hours, dist, y_min, y_max
+        def label_coord_func(apparent, dec, ra):
+            alt, az, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
+            return alt.degrees, az.degrees, dec, ra
+        def xy_func(dec, ra):
+            return x0+ra*x_factor,y0+(dec-y_min)*y_factor
+        s = [
+            SkymapAlmanacType.SVG_START,
+            ' x="%s" y="%s"' % (self.x,self.y) if self.x is not None and self.y is not None else '',
+            ZodiacBinder.SVG_START_ATTR % (self.width,svg_height,box_width,box_height,
+            '\n  class="%s"' % self.html_class if self.html_class else '',
+            '\n  id="%s"' % self.id if self.id else '',
+            '\n  style="max-width:%s;max-height:%s;"' % (self.max_width,self.max_width) if self.max_width else ''),
+            # SVG description (always in English, not presented to the user)
+            '<desc>Sky map for %.4f&#176; %s, %08.4f&#176; %s on %s %s</desc>\n' % (
+                abs(self.almanac_obj.lat),
+                'N' if self.almanac_obj.lat>=0 else 'S',
+                abs(self.almanac_obj.lon),
+               'E' if self.almanac_obj.lon>=0 else 'W',
+                time.strftime("%Y-%m-%dT%H:%M:%S",time.localtime(self.almanac_obj.time_ts)),
+                timezone_name(self.almanac_obj.time_ts)
+            ),
+            '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
+            '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.2,y0-height+0.2,width-0.4,height-0.4)
+        ]
+        # background
+        if True:
+            background_color = self.night_color
+            moon_background_color = '#2a2927'
+            constellation_line_color = '#909000'
+            zodiac_line_color = '#C000C0'
+        background_color = "#%02X%02X%02X" % background_color
+        background_color, moon_background_color, constellation_line_color, horizon_color = self.get_colors(observer, time_ti)
+        s.append('<rect fill="%s" stroke="currentColor" stroke-width="0.4" x="%s" y="%s" width="%s" height="%s" />\n' % (background_color,x0,y0-height,width,height))
+        if self.show_visibility:
+            s.append('<g clip-path="url(#%s)" id="horizon">\n' % clippathid)
+            s.append(self.draw_visibility_background(almanac_obj,observer,time_ti,xy_func))
+            s.append('</g>\n')
+        # x scale
+        for i in range(25):
+            x1, y1 = xy_func(y_min,i)
+            x2, y2 = xy_func(y_max,i)
+            if 0<i<24:
+                s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" stroke-width="0.2" />\n' % (x1,y1,x2,y2,'#333'))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%sh</text>\n' % (
+                x1,y0+fontsize*1.1,'currentColor',fontsize,i))
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
+            x0+0.5*width,y0+fontsize*2.2,'currentColor',fontsize,self.get_text('Right ascension')))
+        # y scale
+        for i in range(y_min,y_max+1,10):
+            x1, y1 = xy_func(i,0)
+            x2, y2 = xy_func(i,24)
+            if y_min<i<y_max:
+                s.append('<line x1="%.4f" y1="%.4f" x2="%.4f" y2="%.4f" stroke="%s" stroke-width="0.2" />\n' % (x1,y1,x2,y2,'#333'))
+            s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="end" dominant-baseline="middle">%s&#176;</text>\n' % (x0-3,y1,'currentColor',fontsize,i))
+        txt = self.get_text('Declination')
+        s.append('<text x="%.2f" y="%.2f" fill="currentColor" font-size="%s" text-anchor="middle" dominant-baseline="middle" transform="rotate(270,%.2f,%.2f)">%s</text>\n' % (
+            x0-3.6*fontsize,y0-0.5*height,fontsize,x0-3.8*fontsize,y0-0.5*height,txt))
+        # zodiac names
+        if True:
+            s.append(self.print_zodiac_names(observer, time_ti, coord_func, xy_func, y0-height-0.5*fontsize, 'currentColor', fontsize))
+        # start clipping
+        s.append('<g clip-path="url(#%s)">\n' % clippathid)
+        # ecliptic
+        if self.show_ecliptic:
+            s.append(self.circle_of_ecliptic(observer, almanac_obj, time_ti, coord_func, xy_func))
+        # stars
+        s.append(self.draw_stars(
+            observer, time_ti, 
+            coord_func, xy_func, 
+            constellation_line_color, zodiac_line_color,
+            0.1 if self.width>=1400 else (0.15 if self.width>=1000 else 0.2)
+        ))
+        time3_ts = time.thread_time_ns()*0.000001
+        # solar system bodies
+        s.append(self.draw_solar_system_bodies(
+            observer, time_ti,
+            coord_func, xy_func, label_coord_func,
+            self.bodies,
+            moon_background_color,
+            almanac_obj,
+            1.0
+        ))
+        s.append('</g>\n')
+        # caption
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*box_width,fontsize*1.5,'currentColor',fontsize*1.5,self.caption))
+        # sub-caption
+        txt = '%s %s ' % (time.strftime('%x %X',time.localtime(almanac_obj.time_ts)),timezone_name(almanac_obj.time_ts,True,self.labels))
+        s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle">%s</text>\n' % (
+            0.5*box_width,fontsize*2.7,'currentColor',fontsize*1.1,txt))
+        s.append(SkymapAlmanacType.SVG_END)
+        return ''.join(s)
+
+    
 class MoonSymbolBinder:
     """ SVG image of the moon showing her phase """
 
@@ -1723,6 +2022,7 @@ class EquationOfTimeBinder:
         self.caption = None
         self.tz_labels = self.labels['TZ']
         self.heavenly_body_name = self.labels.get(self.heavenly_body,self.heavenly_body.capitalize())
+        self.x_label_format = '%x'
 
     def __call__(self, **kwargs):
         for key in kwargs:
@@ -1876,15 +2176,16 @@ class EquationOfTimeBinder:
             x0,y0-height,width,height,self.colors[0]))
         # x scale
         yr = time.localtime(self.almanac_obj.time_ts).tm_year
+        mday = (14 if self.x_label_format=='%m' or self.x_label_format=='%b' else 0)*x_factor
         for i in range(1,14):
             t = time.localtime(time.mktime((yr,i if i<13 else 1,1,12,0,0,0,0,-1)))
             x = ((t.tm_yday-1) if i<13 else year_len)*x_factor+x0
             if 1<i<13:
                 s.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" />\n' % (x,y0,x,y0-height,self.colors[1]))
-            t = time.strftime('%x',t).replace(str(yr),'').strip()
+            t = time.strftime(self.x_label_format,t).replace(str(yr),'').strip()
             if t[0] in {'-','/'}: t = t[1:]
             s.append('<text x="%.2f" y="%.2f" fill="%s" font-size="%s" text-anchor="middle" dominant-baseline="middle">%s</text>\n' % (
-                x,y0+fontsize*1.1,self.colors[0],fontsize,t))
+                x+mday,y0+fontsize*1.1,self.colors[0],fontsize,t))
         # y scale
         st_to_ha = 12 if self.y_axis.lower() in {'solar time','lmt','lat'} or sunrise_transit_sunset else 0
         scale = 1.0 if sunrise_transit_sunset else 12.0
@@ -2221,6 +2522,7 @@ class SkymapService(StdService):
                     },
                     'ecliptical':'ekliptisch',
                     'equatorial':'äquatorial',
+                    'The Sun, Moon, and the planets in the zodiac':'Sonne, Mond und Planeten im Tierkreis',
                     # planet names that are different from English
                     'mercury':'Merkur',
                     'mercury_barycenter':'Merkur',
@@ -2397,6 +2699,8 @@ class SkymapService(StdService):
             The file `constellationship.fab` is licensed under GPL 2.0 by 
             Stellarium. As weewx-skymap-almanac is licensed under GPL 3.0,
             the file can be used here according to its license.
+            
+            See also https://github.com/skyfielders/python-skyfield/blob/master/skyfield/data/stellarium.py
         """
         import skyfield.data.stellarium
         fn = os.path.dirname(os.path.realpath(__file__))
@@ -2411,3 +2715,6 @@ class SkymapService(StdService):
                 stars.extend(j)
         stars = set(stars)
         return constellations, stars
+
+# log version info at startup
+loginf("%s version %s" % ("WeeWX skymap almanac extension",VERSION))

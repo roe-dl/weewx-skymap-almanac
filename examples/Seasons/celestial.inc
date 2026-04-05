@@ -290,6 +290,9 @@ $eot.long_form("%(minute)d %(minute_label)s, %(second)d %(second_label)s")
       <div class="celestial_body">
         $almanac.libration_diagram(context='month 1800')
       </div>
+      <div class="celestial_body">
+        $almanac.zodiacmap(width=1400)
+      </div>
       #end if
     </div>
   #else

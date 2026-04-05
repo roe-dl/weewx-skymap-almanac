@@ -9,6 +9,7 @@ Sky map, Moon with phase and tilt, and astronomical diagrams for WeeWX
 * [Installation instructions](#installation-instructions)
 * [Configuration instructions](#configuration-instructions)
 * [Sky map](#sky-map)
+* [Zodiac map](#zodiac-map)
 * [Moon with moon phase](#moon-with-moon-phase)
 * [Analemma](#analemma)
 * [Libration](#libration)
@@ -271,6 +272,49 @@ The sky map image contains different timestamps:
   sidereal time. 
 * **Civil time**: Civil time you find in the lower right corner together
   with the date.
+
+## Zodiac map
+
+This map shows the astronomical zodiac, not the astrological one. It shows
+the actual position of the Sun, the Moon, and the planets before the 
+background of the stars. 
+
+The dotted magenta line is the ecliptic. All the bodies of the solar system
+are found near it.
+Magenta lines mark the 12 zodiac constellations. Their names are above
+the map. In astronomy, the solar system bodies pass a 13th constellation,
+Ophiuchus (Oph), which is traditionally not considered part of the zodiac.
+You see its yellow line cross the ecliptic near Scorpion.
+
+The map is based on equatorial coordinates and covers an area of +-30°
+around the celestial equator. The background color marks, which part of
+the map is actually above and below the horizon at your location. Blue
+background is above, brown background is below it.
+
+If you position the mouse above one of the heavenly bodies, a tooltip
+window with additional information is displayed.
+
+### Usage
+
+Add `$almanac.zodiacmap` to your skin. It is recommended to enlarge the
+size by setting `width` like `$almanac.zodiacmap(width=1600)`. 
+
+### Parameters
+
+The parameters are the same as those of the sky map, but there is one
+additional paremeter:
+
+* `show_visibility`: Whether to color the map background according to the
+  visibility of that area at the current time and location. Default is on.
+
+### The zodiac in history
+
+The March equinox slowly moves through the zodiac within about 25800 years.
+So in history you see the Sun and the other heavenly bodies in other
+constellations at same time of year. If you loaded an ephemeris file that
+covers a long range of time you can display the situation in ancient
+times by setting `almanac_time` to a timestamp far in history. With the
+standard ephemeris file you can go back until 1551.
 
 ## Moon with moon phase
 
