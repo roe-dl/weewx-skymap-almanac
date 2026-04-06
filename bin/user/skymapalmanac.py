@@ -614,8 +614,8 @@ class SkymapBinder:
         #       event.
         dot = Star(ra_hours=0,dec_degrees=0,epoch=time_ti)
         apparent = observer.at(time_ti).observe(dot).apparent()
-        alt, az, _ = apparent.altaz(temperature_C=almanac_obj.temperature,pressure_mbar=almanac_obj.pressure)
-        x,y = self.to_xy(alt.degrees,az.radians)
+        alt, az, _, _, _ = coord_func(apparent)
+        x, y = xy_func(alt, az)
         s.append('<circle cx="%.4f" cy="%.4f" r="%s"><title>%s</title></circle>\n' % (x,y,0.5,self.get_text('First point of Aries')))
         logdbg("ecliptic elapsed CPU time %.3fms %.3fms %.3fms %.3fms" % (time1_ts-time0_ts,time2_ts-time1_ts,time3_ts-time2_ts,time4_ts-time3_ts))
         s.append('</g>\n')
