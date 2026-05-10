@@ -28,7 +28,7 @@
 * ability to use a picture pattern
 * libration diagram
 * geocentric ecliptic coordinates in tooltip
-0.6
+0.6 10may2026
 * update example
 * use `get_lang_dict` from core WeeWX and other localization details
 * switch off `interpolation` when reading configuration files
