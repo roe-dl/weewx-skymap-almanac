@@ -33,7 +33,7 @@
     Thin space                &#8201;
 """
 
-VERSION="0.6"
+VERSION="0.6.1"
 
 import time
 import os.path
@@ -2660,7 +2660,7 @@ class SkymapService(StdService):
             if data:
                 # used for determining skin language
                 conf['hour'] = data.get('Units',dict()).get('Labels',dict()).get('hour')
-                conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',[])[0]
+                conf['moon_phase_new_moon'] = data.get('Almanac',dict()).get('moon_phases',['New Moon'])[0]
                 # get language dependent texts used in astronomy
                 x = data.get('Texts',dict())
                 for key in {'Azimuth','Day','Declination','Equinox','Latitude','Moon Phase','Phase','Right ascension','Sunrise','Sunset','Transit','Year','Rise','Transit','Set','Equation of Time'}:
