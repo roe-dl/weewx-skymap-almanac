@@ -769,8 +769,10 @@ class SkymapBinder:
                 #ra, dec, _ = apparent.radec('date')
                 x,y = xy_func(alt,az)
                 alt, az, dec, ra = label_coord_func(apparent, alt, az)
-                dir = int(round(az/22.5,0))
-                if dir==16: dir = 0
+                # See to_ordinal_compass in units.py of WeeWX
+                _sector_size = 360.0 / (len(ordinates)-1)
+                _degree = (az + _sector_size/2.0) % 360.0
+                dir = int(_degree / _sector_size)
                 # horizontal coordinate system: altitude, azimuth
                 # rotierendes äquatoriales Koordinatensystem: ra dec
                 # ortsfestes äquatoriales Koordindatensystem: ha dec
@@ -846,12 +848,13 @@ class SkymapBinder:
                     txt += '\n%s: %.2f' % (self.get_text('Magnitude'),magnitude)
                 if isinstance(body_eph,EarthSatellite):
                     point = wgs84.geographic_position_of(body_eph.at(time_ti))
+                    _sectors = int((len(ordinates)-1)/4)
                     txt += '\n{:}: {:.4f}&#176; {:}, {:.4f}&#176; {:}, {:_.0f}{:}'.format(
                         self.get_text('Position'),
                         abs(point.latitude.degrees),
-                        ordinates[0 if point.latitude.degrees>=0.0 else 8],
+                        ordinates[0 if point.latitude.degrees>=0.0 else 2*_sectors],
                         abs(point.longitude.degrees),
-                        ordinates[4 if point.longitude.degrees>=0.0 else 12],
+                        ordinates[1*_sectors if point.longitude.degrees>=0.0 else 3*_sectors],
                         point.elevation.km,
                         unit).replace('_','&#8239;')
                 dots.append((body,txt,x,y,r,distance,col,radius,phase,short_label,shape))
@@ -986,7 +989,7 @@ class SkymapBinder:
             # semi-major axis
             x1 = 90.0/numpy.cos(numpy.arcsin((90.0-abs(almanac_obj.lat))/90.0))
             # name of the celestial pole
-            txt = ordinates[0 if almanac_obj.lat>=0 else 8]
+            txt = ordinates[0 if almanac_obj.lat>=0 else int((len(ordinates)-1)/2)]
             # mark of celestial pole and line of celestial equator
             s.append(
                 '<path fill="none" stroke="#808080" stroke-width="0.2" d="M-2.5,%.4fh5M-90,0A%s,90 0 0 %s 90,0" />\n' % (
@@ -1042,15 +1045,16 @@ class SkymapBinder:
                 azh -= 1.5*DEG2RAD
             #x,y = self.to_xy(-8,azh)
             x,y = self.inout*99*numpy.sin(azh),-97*numpy.cos(azh)
+            _sector = int((len(ordinates)-1)/4)
             if i==0:
                 txt = ordinates[0] # north
             elif i==6:
-                txt = ordinates[4] # east
+                txt = ordinates[1*_sector] # east
                 x -= 3*self.inout
             elif i==12:
-                txt = ordinates[8] # south
+                txt = ordinates[2*_sector] # south
             elif i==18:
-                txt = ordinates[12] # west
+                txt = ordinates[3*_sector] # west
                 x += 2*self.inout
             else:
                 txt = "%d°" % (i*15)
@@ -1081,18 +1085,19 @@ class SkymapBinder:
             lon_vt = ValueHelper(ValueTuple(abs(almanac_obj.lon),'degree_compass','group_direction'),'current',formatter=almanac_obj.formatter,converter=almanac_obj.converter)
             lat_s = lat_vt.format("%8.4f")
             lon_s = lon_vt.format("%08.4f")
+            _sector = int((len(ordinates)-1)/4)
             if self.location:
                 s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s</text>\n' % self.location)
                 s.append('<text x="-97" y="92" font-size="3.5" fill="currentColor" text-anchor="start">%s %s, %s %s</text>\n' % (
-                    lat_s.strip(),ordinates[0 if almanac_obj.lat>=0 else 8],
-                    lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]
+                    lat_s.strip(),ordinates[0 if almanac_obj.lat>=0 else 2*_sector],
+                    lon_s,ordinates[1*_sector if almanac_obj.lon>=0 else 3*_sector]
                 ))
             else:
                 s.append('<text x="-97" y="87" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
                     lat_s.replace(' ','&#8199;'), # &numsp;
-                    ordinates[0 if almanac_obj.lat>=0 else 8]))
+                    ordinates[0 if almanac_obj.lat>=0 else 2*_sector]))
                 s.append('<text x="-97" y="93" font-size="5" fill="currentColor" text-anchor="start">%s %s</text>\n' % (
-                    lon_s,ordinates[4 if almanac_obj.lon>=0 else 12]))
+                    lon_s,ordinates[1*_sector if almanac_obj.lon>=0 else 3*_sector]))
         #s.append(moonphasetest())
         datasource = ['IERS']
         if self.bodies: datasource.append('JPL')

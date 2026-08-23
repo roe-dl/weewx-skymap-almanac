@@ -37,3 +37,4 @@
 * log version info at startup
 0.6.1
 * fix IndexError in initialization in case of missing or incomplete language file
+* fix ordinate name calculation (ordinate names list is of variable length in WeeWX)
