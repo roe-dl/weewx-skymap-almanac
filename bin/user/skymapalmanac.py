@@ -33,7 +33,7 @@
     Thin space                &#8201;
 """
 
-VERSION="0.6.1"
+VERSION="0.7"
 
 import time
 import os.path
@@ -49,7 +49,9 @@ import weewx.reportengine
 import weeutil.weeutil
 import user.skyfieldalmanac
 
+# Import Skyfield modules
 import numpy
+from skyfield import VERSION as SKYFIELD_VERSION
 try:
     from skyfield.api import N, S, E, W, Loader, wgs84, EarthSatellite, Star, Angle
 except (ImportError,PermissionError):
@@ -2086,9 +2088,20 @@ class EquationOfTimeBinder:
         # calculate diagram
         if sunrise_transit_sunset:
             # rise, transit, set
-            tr, yr = skyfield.almanac.find_risings(observer, body, t0, t1)
-            tt = skyfield.almanac.find_transits(observer, body, t0, t1)
-            ts, ys = skyfield.almanac.find_settings(observer, body, t0, t1)
+            if SKYFIELD_VERSION<(1,47):
+                station = wgs84.latlon(self.almanac_obj.lat,self.almanac_obj.lon,elevation_m=self.almanac_obj.altitude)
+                f = skyfield.almanac.meridian_transits(user.skyfieldalmanac.ephemerides, body, station)
+                t, y = skyfield.almanac.find_discrete(t0, t1, f)
+                tt = user.skyfieldalmanac.ts.tai_jd([i for i,j in zip(t.tai, y) if j==1])
+                t, y = skyfield.almanac.find_discrete(t0, t1, skyfield.almanac.risings_and_settings(user.skyfieldalmanac.ephemerides, body, station))
+                tr = user.skyfieldalmanac.ts.tai_jd([i for i,j in zip(t.tai, y) if j==0])
+                yr = [True*len(tr.tai)]
+                ts = user.skyfieldalmanac.ts.tai_jd([i for i,j in zip(t.tai, y) if j==1])
+                ys = [True*len(ts.tai)]
+            else:
+                tr, yr = skyfield.almanac.find_risings(observer, body, t0, t1)
+                tt = skyfield.almanac.find_transits(observer, body, t0, t1)
+                ts, ys = skyfield.almanac.find_settings(observer, body, t0, t1)
             # rise relative to noon
             trh = tr-time_ti
             trd = numpy.round(trh,0)
@@ -2170,6 +2183,7 @@ class EquationOfTimeBinder:
              '<!-- Created using WeeWX and weewx-skymap-almanac extension -->\n',
              '<defs><clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s" /></clipPath></defs>\n' % (clippathid,x0+0.5,y0-height+0.5,width-1.0,height-1.0)
         ]
+        # colored background for light day
         if sunrise_transit_sunset and numpy.nanmin(tsh)>=numpy.nanmax(trh):
             s.append('<path stroke="none" fill="yellow" opacity="0.1" d="')
             s.append('M%.4f,%.4f' % (x0,data[1][1][0]))
@@ -2723,3 +2737,4 @@ class SkymapService(StdService):
 
 # log version info at startup
 loginf("%s version %s" % ("WeeWX skymap almanac extension",VERSION))
+loginf("Skyfield version %s" % '.'.join([str(i) for i in SKYFIELD_VERSION]))
